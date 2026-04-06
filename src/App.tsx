@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { Board, AREA_MAP } from './components/Board';
+import { Scoreboard } from './components/Scoreboard';
+import { PlayArea } from './components/PlayArea';
+import { PositionRoster } from './components/PositionRoster';
 import { PlayerHand } from './components/PlayerHand';
+import { Card } from './components/Card';
 import { StartScreen } from './components/StartScreen';
 import { FaceoffModal } from './components/FaceoffModal';
 import { ConfirmModal } from './components/ConfirmModal';
@@ -13,7 +17,10 @@ function App() {
   } = useGame();
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
+  const [showBenchFor, setShowBenchFor] = useState<'home' | 'away' | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{ message: string; onConfirm: () => void } | null>(null);
+
+  const activeBench = showBenchFor ? state[showBenchFor].bench : [];
 
   const puckKey = `${state.puck.side}-${state.puck.area}`;
   const puckY = parseFloat(AREA_MAP[puckKey]?.y || '50');
@@ -55,11 +62,11 @@ function App() {
     if (direction === 'up') {
       // Move from defensive → neutral (entry node 12) or neutral → offensive (entry node 0)
       if (currentZone === 'defensive') movePuckTo(12 as any, 'neutral');
-      else if (currentZone === 'neutral') movePuckTo(0 as any, 'home');
+      else if (currentZone === 'neutral') movePuckTo(0 as any, 'away');
     } else {
       // Move from offensive → neutral (entry node 9) or neutral → defensive (entry node 0)
       if (currentZone === 'offensive') movePuckTo(9 as any, 'neutral');
-      else if (currentZone === 'neutral') movePuckTo(0 as any, 'away');
+      else if (currentZone === 'neutral') movePuckTo(0 as any, 'home');
     }
   };
 
@@ -81,6 +88,10 @@ function App() {
 
       {hasStarted && (
         <div className="tactical-interface">
+          <Scoreboard state={state} />
+          <PlayArea state={state} />
+          <PositionRoster side="home" />
+          <PositionRoster side="away" />
           {/* Fixed overlays */}
           <button className="back-btn" onClick={handleBackToStart}>← BACK</button>
           <div className="global-stats">
@@ -110,51 +121,79 @@ function App() {
             <Board
               state={state}
               onAreaClick={handleAreaClick}
-              onBenchSwap={handleBenchSwap}
               onNavigateZone={handleNavigateZone}
-              selectedHandCardId={selectedCardId}
             />
 
-            {/* Hand Dock */}
-            <div className="hand-dock">
-              <div className="hand-row">
-                {/* Home Deck */}
-                <div className="deck-pod home-deck">
-                  <div className="deck-visual white-deck">
-                    <span className="deck-count">{state.home.deck.length}</span>
-                  </div>
-                  <span className="deck-tag">WHITE</span>
+            {/* Hand Dock with outside deck indicators */}
+            <div className="hand-dock-wrapper">
+              
+              {/* Home Deck — left side outside the box */}
+              <div className="deck-pod home-deck">
+                <button className="deck-bench-btn" onClick={() => setShowBenchFor('home')}>BENCH</button>
+                <div className="deck-visual white-deck">
+                  <span className="deck-count">{state.home.deck.length}</span>
+                </div>
+                <span className="deck-tag">WHITE</span>
+              </div>
+
+              <div className="hand-dock">
+                <div className="hand-row">
+                  <PlayerHand
+                    player={state[state.turn]}
+                    onCardClick={(id) => setSelectedCardId(selectedCardId === id ? null : id)}
+                    selectedCardId={selectedCardId}
+                    isTurn={true}
+                  />
                 </div>
 
-                {/* Cards */}
-                <PlayerHand
-                  player={state[state.turn]}
-                  onCardClick={(id) => setSelectedCardId(selectedCardId === id ? null : id)}
-                  selectedCardId={selectedCardId}
-                  isTurn={true}
-                />
-
-                {/* Away Deck */}
-                <div className="deck-pod away-deck">
-                  <div className="deck-visual black-deck">
-                    <span className="deck-count">{state.away.deck.length}</span>
-                  </div>
-                  <span className="deck-tag">BLACK</span>
+                {/* Action Buttons */}
+                <div className="action-row">
+                  {state.phase === 1 && (
+                    <button className="act-btn faceoff-btn" onClick={startFaceoff}>START FACEOFF</button>
+                  )}
+                  <button className="act-btn phase-btn" onClick={endTurn}>NEXT PHASE</button>
+                  {!state.activeChallenge && (
+                    <button className="act-btn period-btn" onClick={nextPeriod}>NEXT PERIOD</button>
+                  )}
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="action-row">
-                {state.phase === 1 && (
-                  <button className="act-btn faceoff-btn" onClick={startFaceoff}>START FACEOFF</button>
-                )}
-                <button className="act-btn phase-btn" onClick={endTurn}>NEXT PHASE</button>
-                {!state.activeChallenge && (
-                  <button className="act-btn period-btn" onClick={nextPeriod}>NEXT PERIOD</button>
-                )}
+              {/* Away Deck — right side outside the box */}
+              <div className="deck-pod away-deck">
+                <button className="deck-bench-btn" onClick={() => setShowBenchFor('away')}>BENCH</button>
+                <div className="deck-visual black-deck">
+                  <span className="deck-count">{state.away.deck.length}</span>
+                </div>
+                <span className="deck-tag">BLACK</span>
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Bench Overlay Modal */}
+      {showBenchFor && (
+        <div className="bench-expanded-overlay" onClick={() => setShowBenchFor(null)}>
+          <div className="bench-cards-container" onClick={e => e.stopPropagation()}>
+            <h3>{showBenchFor.toUpperCase()} BENCH</h3>
+            <div className="bench-grid">
+              {activeBench.map(card => (
+                <div key={card.id} className="bench-card-item">
+                  <Card 
+                    card={card} 
+                    onClick={() => {
+                      if (selectedCardId) {
+                        handleBenchSwap(showBenchFor, selectedCardId, card.id);
+                        setShowBenchFor(null);
+                      }
+                    }} 
+                  />
+                  {selectedCardId && <div className="swap-hint">CLICK TO SWAP</div>}
+                </div>
+              ))}
+            </div>
+            <button className="close-bench-btn" onClick={() => setShowBenchFor(null)}>CLOSE</button>
           </div>
         </div>
       )}
@@ -165,9 +204,11 @@ function App() {
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         .app-main {
-          width: 100vw; height: 100vh;
+          width: 100vw;
+          min-height: 100vh;
           background: #02060c;
-          overflow: hidden;
+          overflow-x: hidden;
+          overflow-y: auto;
           font-family: 'Inter', sans-serif;
           color: white;
         }
@@ -204,14 +245,18 @@ function App() {
 
         /* --- Central HUD Stack --- */
         .tactical-interface {
-          width: 100%; height: 100%;
-          display: flex; align-items: center; justify-content: center;
+          width: 100%;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding: 70px 0 40px;
         }
 
         .hud-stack {
           display: flex; flex-direction: column; align-items: center;
-          gap: 0;
-          width: 92vw; max-width: 520px;
+          gap: 16px;
+          width: 96vw; max-width: 700px;
         }
 
         /* Zone Tracker */
@@ -254,28 +299,49 @@ function App() {
         .offensive .zone-bar-fill { background: #ff3b30; }
         .defensive .zone-bar-fill { background: #007aff; }
 
+        /* Hand Dock Wrapper — deck pods sit outside the box */
+        .hand-dock-wrapper {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 14px;
+          width: 100%;
+          position: relative;
+          z-index: 10;
+        }
+
         /* Hand Dock */
         .hand-dock {
-          width: 100%;
-          background: rgba(12, 22, 38, 0.92);
-          backdrop-filter: blur(30px);
-          border: 1px solid rgba(255,255,255,0.1);
-          border-top: none;
-          border-radius: 0 0 20px 20px;
+          flex: 1;
+          min-width: 0;
+          background: rgba(8, 16, 30, 0.96);
+          backdrop-filter: blur(40px);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 20px;
           padding: 16px 18px 20px;
           display: flex; flex-direction: column; gap: 14px;
+          box-shadow: 0 -10px 40px rgba(0,0,0,0.6);
         }
 
         .hand-row {
           display: flex; align-items: center;
-          justify-content: space-between; gap: 12px;
+          justify-content: center; gap: 12px;
         }
 
-        /* Deck Pods */
+        /* Deck Pods & Bench */
         .deck-pod {
           display: flex; flex-direction: column; align-items: center; gap: 5px;
           flex-shrink: 0;
         }
+        .deck-bench-btn {
+          font-size: 10px; font-weight: 800; letter-spacing: 1px;
+          background: rgba(255,255,255,0.1); color: white;
+          border: 1px solid rgba(255,255,255,0.2);
+          border-radius: 4px; padding: 4px 8px; cursor: pointer;
+          margin-bottom: 4px; transition: background 0.2s;
+        }
+        .deck-bench-btn:hover { background: rgba(255,255,255,0.2); }
+
         .deck-visual {
           width: 48px; height: 66px;
           border-radius: 6px;
