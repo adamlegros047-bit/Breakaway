@@ -18,9 +18,11 @@ function App() {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
   const [showBenchFor, setShowBenchFor] = useState<'home' | 'away' | null>(null);
+  const [showDeckFor, setShowDeckFor] = useState<'home' | 'away' | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
   const activeBench = showBenchFor ? state[showBenchFor].bench : [];
+  const activeDeckDisplay = showDeckFor ? state[showDeckFor].deck : [];
 
   const puckKey = `${state.puck.side}-${state.puck.area}`;
   const puckY = parseFloat(AREA_MAP[puckKey]?.y || '50');
@@ -130,7 +132,7 @@ function App() {
               {/* Home Deck — left side outside the box */}
               <div className="deck-pod home-deck">
                 <button className="deck-bench-btn" onClick={() => setShowBenchFor('home')}>BENCH</button>
-                <div className="deck-visual white-deck">
+                <div className="deck-visual white-deck" onClick={() => setShowDeckFor('home')}>
                   <span className="deck-count">{state.home.deck.length}</span>
                 </div>
                 <span className="deck-tag">WHITE</span>
@@ -161,7 +163,7 @@ function App() {
               {/* Away Deck — right side outside the box */}
               <div className="deck-pod away-deck">
                 <button className="deck-bench-btn" onClick={() => setShowBenchFor('away')}>BENCH</button>
-                <div className="deck-visual black-deck">
+                <div className="deck-visual black-deck" onClick={() => setShowDeckFor('away')}>
                   <span className="deck-count">{state.away.deck.length}</span>
                 </div>
                 <span className="deck-tag">BLACK</span>
@@ -198,6 +200,23 @@ function App() {
         </div>
       )}
 
+      {/* Deck Overlay Modal */}
+      {showDeckFor && (
+        <div className="bench-expanded-overlay" onClick={() => setShowDeckFor(null)}>
+          <div className="bench-cards-container deck-cards-container" onClick={e => e.stopPropagation()}>
+            <h3>{showDeckFor.toUpperCase()} DECK ({activeDeckDisplay.length})</h3>
+            <div className="bench-grid">
+              {activeDeckDisplay.map((card, idx) => (
+                <div key={`${card.id}-${idx}`} className="bench-card-item">
+                  <Card card={card} />
+                </div>
+              ))}
+            </div>
+            <button className="close-bench-btn" onClick={() => setShowDeckFor(null)}>CLOSE</button>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
 
@@ -214,6 +233,50 @@ function App() {
         }
 
         /* --- Fixed Overlays --- */
+        .bench-expanded-overlay {
+          position: fixed; inset: 0;
+          background: rgba(0,0,0,0.85);
+          backdrop-filter: blur(12px);
+          z-index: 5000;
+          display: flex; align-items: center; justify-content: center;
+          padding: 20px;
+        }
+        .bench-cards-container {
+          background: #050d18; 
+          padding: 24px;
+          border-radius: 20px; 
+          border: 1px solid rgba(255,255,255,0.1);
+          width: 90vw;
+          max-width: 1100px;
+          max-height: 90vh;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.9);
+        }
+        .bench-cards-container h3 {
+          margin-bottom: 16px;
+          text-align: center;
+          color: white;
+          letter-spacing: 2px;
+        }
+        .bench-grid { 
+          display: flex; 
+          gap: 16px; 
+          flex-wrap: wrap; 
+          justify-content: center;
+          overflow-y: auto;
+          flex: 1;
+          padding-bottom: 16px;
+          scrollbar-width: thin;
+        }
+        .swap-hint { font-size: 9px; color: #ffcc00; text-align: center; margin-top: 8px; font-weight: 800; }
+        .close-bench-btn {
+          margin-top: 16px; background: #ff3b30; border: none;
+          color: white; padding: 12px 22px; border-radius: 6px; cursor: pointer; font-weight: 800;
+          width: fit-content; align-self: center; transition: background 0.2s;
+        }
+        .close-bench-btn:hover { background: #ff5247; }
+
         .back-btn {
           position: fixed; top: 16px; left: 16px; z-index: 200;
           background: #112244; border: none; color: white;
@@ -348,6 +411,12 @@ function App() {
           display: flex; align-items: center; justify-content: center;
           position: relative;
           box-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+          cursor: pointer;
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .deck-visual:hover {
+          transform: translateY(-2px);
+          box-shadow: 2px 4px 5px rgba(0,0,0,0.4);
         }
         .white-deck {
           background: #f0f0f0;

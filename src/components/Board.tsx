@@ -229,24 +229,6 @@ export const Board: React.FC<BoardProps> = ({ state, onAreaClick, onNavigateZone
         }
 
         /* Bench overlay */
-        .bench-expanded-overlay {
-          position: fixed; inset: 0;
-          background: rgba(0,0,0,0.85);
-          backdrop-filter: blur(12px);
-          z-index: 5000;
-          display: flex; align-items: center; justify-content: center;
-        }
-        .bench-cards-container {
-          background: #050d18; padding: 36px;
-          border-radius: 20px; border: 1px solid rgba(255,255,255,0.1);
-          max-width: 90vw;
-        }
-        .bench-grid { display: flex; gap: 16px; margin-top: 16px; flex-wrap: wrap; }
-        .swap-hint { font-size: 9px; color: #ffcc00; text-align: center; margin-top: 8px; font-weight: 800; }
-        .close-bench-btn {
-          margin-top: 24px; background: #ff3b30; border: none;
-          color: white; padding: 10px 22px; border-radius: 6px; cursor: pointer; font-weight: 800;
-        }
       `}</style>
     </div>
   );
