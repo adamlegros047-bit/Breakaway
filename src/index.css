@@ -1,0 +1,108 @@
+
+:root {
+  --ice-blue: #e0f2f1;
+  --rink-blue: #2196f3;
+  --rink-red: #f44336;
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.3);
+  --text-primary: #263238;
+  --font-main: 'Outfit', sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--ice-blue);
+  font-family: var(--font-main);
+  color: var(--text-primary);
+  overflow-x: hidden;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.board-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+  flex-grow: 1;
+}
+
+.rink {
+  width: 900px;
+  height: 450px;
+  background: white;
+  border-radius: 200px;
+  border: 4px solid #cfd8dc;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.05);
+}
+
+.center-line {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--rink-red);
+  transform: translateX(-50%);
+}
+
+.blue-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--rink-blue);
+}
+
+.blue-line-left { left: 33%; }
+.blue-line-right { right: 33%; }
+
+.faceoff-circle {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  border: 2px solid var(--rink-red);
+  border-radius: 50%;
+}
+
+.area-node {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background: rgba(0,0,0,0.05);
+  border: 2px dashed rgba(0,0,0,0.1);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  color: rgba(0,0,0,0.3);
+  z-index: 10;
+}
+
+.puck {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background: #212121;
+  border-radius: 50%;
+  border: 2px solid #000;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  z-index: 100;
+}
