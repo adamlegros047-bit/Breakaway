@@ -47,9 +47,9 @@ export const PlayerHand: React.FC<PlayerHandProps> = ({ player, onCardClick, sel
         }
         .cards-scroll {
           display: flex;
-          gap: 10px;
+          gap: 5px;
           overflow-x: auto;
-          padding: 10px;
+          padding: 5px;
           scrollbar-width: none;
         }
         .cards-scroll::-webkit-scrollbar { display: none; }
@@ -57,8 +57,10 @@ export const PlayerHand: React.FC<PlayerHandProps> = ({ player, onCardClick, sel
         .hand-card-wrapper {
           transform: scale(0.65);
           transform-origin: center top;
-          width: 95px; /* Adjust width contribution when scaled */
+          width: 92px; /* Tighten width to match scale */
+          height: 155px; /* DRASTICALLY reduce vertical space for scaled card */
           transition: transform 0.2s;
+          overflow: visible;
         }
         .hand-card-wrapper:hover {
           transform: scale(0.85) translateY(-20px);
