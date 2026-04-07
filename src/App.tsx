@@ -14,7 +14,8 @@ import { useGame } from './hooks/useGame';
 function App() {
   const { 
     state, startGame, playCard, endTurn, movePuckTo, switchWithBench, 
-    startFaceoff, nextPeriod, cancelChallenge 
+    startFaceoff, nextPeriod, cancelChallenge,
+    selectFaceoffReward, confirmFaceoffReward
   } = useGame();
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
@@ -53,7 +54,7 @@ function App() {
   };
 
   const handleAreaClick = (area: any, side: any) => {
-    if (state.activeChallenge) return;
+    if (state.activeChallenge || state.faceoffReward) return;
     if (selectedCardId) {
       playCard(state.turn, selectedCardId);
       setSelectedCardId(null);
@@ -88,6 +89,61 @@ function App() {
         <FaceoffModal state={state} onPlayCard={playCard} onClose={cancelChallenge} />
       )}
 
+      {state.faceoffReward && (
+        <div className="reward-overlay">
+          <div className="reward-modal">
+            <div className="reward-header">
+              <h3>FACEOFF REWARD</h3>
+              <p>{state.faceoffReward.winner.toUpperCase()} Team, select your perks!</p>
+            </div>
+            <div className="reward-body">
+              <div className="reward-card-preview">
+                <Card card={state.faceoffReward.card} />
+              </div>
+              <div className="reward-controls">
+                <div className="control-group">
+                  <label>PICK 1 ACTION</label>
+                  <div className="reward-options">
+                    {state.faceoffReward.card.actions.map(act => (
+                      <button 
+                        key={act}
+                        className={`opt-btn ${state.faceoffReward?.selectedAction === act ? 'active' : ''}`}
+                        onClick={() => selectFaceoffReward(act, undefined)}
+                      >{act}</button>
+                    ))}
+                    {state.faceoffReward.card.actions.length === 0 && <span className="no-opts">No actions available</span>}
+                  </div>
+                </div>
+                <div className="control-group">
+                  <label>PICK 1 ABILITY</label>
+                  <div className="reward-options">
+                    {state.faceoffReward.card.abilities.map(ab => (
+                      <button 
+                        key={ab}
+                        className={`opt-btn ${state.faceoffReward?.selectedAbility === ab ? 'active' : ''}`}
+                        onClick={() => selectFaceoffReward(undefined, ab)}
+                        style={{'--ability-color': ab.toLowerCase()} as any}
+                      >{ab}</button>
+                    ))}
+                    {state.faceoffReward.card.abilities.length === 0 && <span className="no-opts">No abilities available</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="reward-footer">
+              <button 
+                className="confirm-reward-btn" 
+                disabled={
+                  (state.faceoffReward.card.actions.length > 0 && !state.faceoffReward.selectedAction) ||
+                  (state.faceoffReward.card.abilities.length > 0 && !state.faceoffReward.selectedAbility)
+                }
+                onClick={confirmFaceoffReward}
+              >CONFIRM REWARD</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmConfig && (
         <ConfirmModal
           message={confirmConfig.message}
@@ -99,7 +155,10 @@ function App() {
       {hasStarted && (
         <div className="tactical-interface">
           <Scoreboard state={state} />
-          <PlayArea state={state} />
+          <PlayArea 
+            state={state} 
+            onCardDrop={(id) => playCard(state.turn, id)}
+          />
           <PositionRoster side="home" />
           <PositionRoster side="away" />
           {/* Fixed overlays */}
@@ -481,6 +540,47 @@ function App() {
         .phase-btn:hover  { background: #ddd; }
         .period-btn { background: rgba(255,255,255,0.08); color: white; border: 1px solid rgba(255,255,255,0.15); }
         .period-btn:hover { background: rgba(255,255,255,0.14); }
+
+        /* Reward Modal */
+        .reward-overlay {
+          position: fixed; inset: 0;
+          background: rgba(0,0,0,0.8); backdrop-filter: blur(15px);
+          z-index: 6000; display: flex; align-items: center; justify-content: center;
+        }
+        .reward-modal {
+          background: #050d18; border: 1px solid rgba(255,255,255,0.15);
+          border-radius: 24px; width: 90vw; max-width: 600px; padding: 32px;
+          display: flex; flex-direction: column; gap: 24px;
+          box-shadow: 0 30px 80px rgba(0,0,0,1);
+        }
+        .reward-header h3 { margin-bottom: 4px; letter-spacing: 2px; color: #ffcc00; }
+        .reward-header p { font-size: 11px; opacity: 0.6; font-weight: 700; letter-spacing: 1px; }
+        .reward-body { display: flex; gap: 32px; align-items: center; }
+        .reward-card-preview { transform: scale(1.1); transform-origin: center; }
+        .reward-controls { flex: 1; display: flex; flex-direction: column; gap: 20px; }
+        .control-group label { display: block; font-size: 9px; font-weight: 950; letter-spacing: 2px; color: #aaa; margin-bottom: 10px; }
+        .reward-options { display: flex; flex-wrap: wrap; gap: 8px; }
+        .opt-btn {
+          background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+          color: white; padding: 8px 12px; border-radius: 8px; font-size: 10px; font-weight: 800;
+          cursor: pointer; transition: all 0.2s;
+        }
+        .opt-btn:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.3); }
+        .opt-btn.active { 
+          background: var(--ability-color, #00d1b2); 
+          color: #000; 
+          border-color: transparent;
+          box-shadow: 0 0 15px var(--ability-color, #00d1b2);
+        }
+        .no-opts { font-size: 9px; opacity: 0.3; font-style: italic; }
+        .reward-footer { display: flex; justify-content: flex-end; pt: 10px; }
+        .confirm-reward-btn {
+          width: 100%; padding: 16px; border-radius: 12px; background: #fff; color: #000;
+          border: none; font-weight: 900; letter-spacing: 1px; cursor: pointer;
+          transition: transform 0.2s, background 0.2s;
+        }
+        .confirm-reward-btn:disabled { opacity: 0.2; cursor: not-allowed; transform: none !important; }
+        .confirm-reward-btn:hover:not(:disabled) { transform: translateY(-2px); background: #eee; }
       `}</style>
     </div>
   );

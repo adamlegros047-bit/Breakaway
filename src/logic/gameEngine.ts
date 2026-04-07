@@ -62,6 +62,7 @@ export const createInitialGameState = (): GameState => {
     activeChallenge: null,
     activeCards: [],
     lastShotCard: null,
+    pendingPerk: null,
     isFinalMinute: false,
     stoppage: true, // Start with a stoppage for the opening face-off
     logs: ['Game started. Ready for opening face-off.'],
@@ -84,8 +85,11 @@ export const resolveChallenge = (state: GameState, homeCard: Card, awayCard: Car
   if (!state.activeChallenge) return state;
   
   const newState = { ...state };
-  const homeVal = (homeCard.number || 0) + state.home.momentumBonus;
-  const awayVal = (awayCard.number || 0) + state.away.momentumBonus;
+  const isFaceoff = state.activeChallenge.type === 'Face-off';
+  
+  // Only apply momentum bonus for non-faceoff challenges (like Shots)
+  const homeVal = (homeCard.number || 0) + (isFaceoff ? 0 : state.home.momentumBonus);
+  const awayVal = (awayCard.number || 0) + (isFaceoff ? 0 : state.away.momentumBonus);
   
   // Reset bonuses after using them in a challenge
   newState.home.momentumBonus = 0;
@@ -98,21 +102,32 @@ export const resolveChallenge = (state: GameState, homeCard: Card, awayCard: Car
   } else if (awayVal > homeVal) {
     winner = 'away';
   } else {
-    // Tied Numbers - Check Suits
-    const homeSuit = getBestSuitValue(homeCard);
-    const awaySuit = getBestSuitValue(awayCard);
-    
-    if (homeSuit > awaySuit) {
-      winner = 'home';
-    } else if (awaySuit > homeSuit) {
-      winner = 'away';
-    } else {
+    // Tied Numbers - For Face-offs, we must redraw if numbers are tied.
+    if (isFaceoff) {
       winner = 'redraw';
+    } else {
+      // For other challenges (Shots), ties are broken by Suits
+      const homeSuit = getBestSuitValue(homeCard);
+      const awaySuit = getBestSuitValue(awayCard);
+      
+      if (homeSuit > awaySuit) {
+        winner = 'home';
+      } else if (awaySuit > homeSuit) {
+        winner = 'away';
+      } else {
+        winner = 'redraw'; 
+      }
     }
   }
 
   if (winner === 'redraw') {
-    newState.logs.push("TIE! Re-draw needed.");
+    const redrawMsg = isFaceoff ? "TIE! Players must select another card." : "TIE! Re-draw needed.";
+    newState.logs.push(redrawMsg);
+    // Clear the played cards so they can start over
+    if (newState.activeChallenge) {
+      newState.activeChallenge.homeCard = null;
+      newState.activeChallenge.awayCard = null;
+    }
     return newState;
   }
 
@@ -122,7 +137,11 @@ export const resolveChallenge = (state: GameState, homeCard: Card, awayCard: Car
     newState.stoppage = false;
     newState.turn = winner;
     newState.phase = 3; 
-    newState.logs.push(`${winner.toUpperCase()} won the face-off!`);
+    newState.pendingPerk = {
+      winner,
+      card: winner === 'home' ? homeCard : awayCard
+    };
+    newState.logs.push(`${winner.toUpperCase()} won the face-off! Resolve your card.`);
   } else if (state.activeChallenge.type === 'Shot') {
     // For Shots, higher value wins. Goalie wins = Save. Shooter wins = Goal.
     if (winner === state.activeChallenge.initiator) {
@@ -141,7 +160,7 @@ export const resolveChallenge = (state: GameState, homeCard: Card, awayCard: Car
   }
 
   newState.activeChallenge = null;
-  newState.activeCards = [homeCard, awayCard];
+  newState.activeCards = winner === 'home' ? [awayCard, homeCard] : [homeCard, awayCard];
   
   return newState;
 };

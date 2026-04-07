@@ -1,5 +1,5 @@
 import { useReducer, useCallback } from 'react';
-import type { GameState, Card, Area } from '../types';
+import type { GameState, Card, Area, ActionType, AbilityColor, PendingPerk } from '../types';
 import { createInitialGameState, switchTurn, drawCard, getZone, resolveChallenge } from '../logic/gameEngine';
 
 type GameAction = 
@@ -16,6 +16,8 @@ type GameAction =
   | { type: 'CANCEL_CHALLENGE' }
   | { type: 'NEXT_PERIOD' }
   | { type: 'SPEND_MOMENTUM', player: 'home' | 'away' }
+  | { type: 'SELECT_PERK', action?: ActionType, ability?: AbilityColor }
+  | { type: 'CONFIRM_PERK' }
   | { type: 'SWITCH_WITH_BENCH', player: 'home' | 'away', handCardId: string, benchCardId: string };
 
 const gameReducer = (state: GameState, action: GameAction): GameState => {
@@ -116,8 +118,12 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
         return gameReducer(newState, { type: 'SCORE' });
       }
 
-      if (card.actions.includes('Save')) {
-        return gameReducer(newState, { type: 'SAVE' });
+      // If NOT a challenge-starting card, trigger Perk Selection immediately
+      if (!state.activeChallenge) {
+        newState.pendingPerk = {
+          winner: action.player,
+          card
+        };
       }
 
       return {
@@ -167,6 +173,7 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
           score: state[scoringTeam].score + 1
         },
         stoppage: true,
+        activeCards: [],
         puck: { area: 9, side: 'neutral', possession: null },
         passingBonusMap: { home: 0, away: 0 },
         lastShotCard: null,
@@ -179,6 +186,7 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
         ...state,
         stoppage: true,
         lastShotCard: null,
+        activeCards: [],
         logs: [...state.logs, "GREAT SAVE! Play continues."],
       };
     }
@@ -190,7 +198,6 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
       const newState = {
         ...state,
         [state.turn]: updatedPlayer,
-        activeCards: [],
       };
       
       return switchTurn(newState);
@@ -252,6 +259,7 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
         away: { ...state.away, preFaceoffSwaps: 2 },
         stoppage: true,
         phase: 1, // Lineup phase
+        activeCards: [],
         logs: [...state.logs, `--- PERIOD ${nextPeriod} START ---`, "Lineup phase: 2 swaps allowed for both players."]
       };
     }
@@ -283,6 +291,28 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
       };
     }
 
+    case 'SELECT_PERK': {
+      if (!state.pendingPerk) return state;
+      return {
+        ...state,
+        pendingPerk: {
+          ...state.pendingPerk,
+          selectedAction: action.action ?? state.pendingPerk.selectedAction,
+          selectedAbility: action.ability ?? state.pendingPerk.selectedAbility,
+        }
+      };
+    }
+
+    case 'CONFIRM_PERK': {
+      if (!state.pendingPerk) return state;
+      const { selectedAction, selectedAbility, winner } = state.pendingPerk;
+      return {
+        ...state,
+        pendingPerk: null,
+        logs: [...state.logs, `${winner.toUpperCase()} resolved: ${selectedAction || 'None'} / ${selectedAbility || 'None'}.`]
+      };
+    }
+
     default:
       return state;
   }
@@ -311,5 +341,8 @@ export const useGame = () => {
     cancelChallenge: () => dispatch({ type: 'CANCEL_CHALLENGE' }),
     nextPeriod: () => dispatch({ type: 'NEXT_PERIOD' }),
     spendMomentum: (player: 'home' | 'away') => dispatch({ type: 'SPEND_MOMENTUM', player }),
+    selectPerk: (action?: ActionType, ability?: AbilityColor) => 
+      dispatch({ type: 'SELECT_PERK', action, ability }),
+    confirmPerk: () => dispatch({ type: 'CONFIRM_PERK' }),
   };
 };

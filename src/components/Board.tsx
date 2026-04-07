@@ -31,15 +31,13 @@ export const AREA_MAP: Record<string, { x: string; y: string }> = {
   'away-8': { x: '50%', y: '10%' },
   'away-6': { x: '12%', y: '7%' },
   
-  'neutral-6': { x: '35%', y: '50.00%' },
-  'neutral-7': { x: '65%', y: '50.00%' },
-  'neutral-8': { x: '50%', y: '50.00%' },
-  'neutral-9': { x: '50%', y: '33.5%' },
-  'neutral-10': { x: '35%', y: '38.21%' },
-  'neutral-11': { x: '65%', y: '38.21%' },
-  'neutral-12': { x: '50%', y: '66.5%' },
-  'neutral-13': { x: '35%', y: '61.79%' },
-  'neutral-14': { x: '65%', y: '61.79%' },
+  'neutral-6':  { x: '22%', y: '42%' },    // 10 Left
+  'neutral-7':  { x: '78%', y: '42%' },    // 10 Right
+  'neutral-10': { x: '50%', y: '42%' },    // Upper 9
+  'neutral-9':  { x: '50%', y: '50.00%' }, // Centre (Face-off)
+  'neutral-11': { x: '50%', y: '58%' },    // Lower 9
+  'neutral-8':  { x: '22%', y: '58%' },    // 11 Left
+  'neutral-12': { x: '78%', y: '58%' },    // 11 Right
 
   'home-bench': { x: '12.5%', y: '5.71%' }, 
   'away-bench': { x: '87.5%', y: '94.29%' }, 

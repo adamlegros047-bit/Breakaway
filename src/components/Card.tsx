@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Card as CardType, AbilityColor } from '../types';
+import type { Card as CardType } from '../types';
 
 interface CardProps {
   card: CardType;
@@ -8,20 +8,7 @@ interface CardProps {
   isFaceDown?: boolean;
 }
 
-const ABILITY_COLORS: Record<AbilityColor, string> = {
-  Black: '#212121',
-  Blue: '#2196f3',
-  Bronze: '#cd7f32',
-  Brown: '#795548',
-  Gold: '#ffc107',
-  Green: '#4caf50',
-  Orange: '#ff9800',
-  Purple: '#9c27b0',
-  Red: '#f44336',
-  Silver: '#9e9e9e',
-  Yellow: '#ffeb3b',
-  Pink: '#e91e63',
-};
+
 
 export const Card: React.FC<CardProps> = ({ card, onClick, disabled, isFaceDown }) => {
   const isWhite = card.id.includes('-white-');
@@ -50,35 +37,20 @@ export const Card: React.FC<CardProps> = ({ card, onClick, disabled, isFaceDown 
     <div 
       className={`card ${disabled ? 'disabled' : ''} ${isFaceDown ? 'face-down' : ''}`}
       onClick={!disabled ? onClick : undefined}
+      draggable={!disabled && !isFaceDown}
+      onDragStart={(e) => {
+        e.dataTransfer.setData('cardId', card.id);
+        e.dataTransfer.effectAllowed = 'move';
+        // Add a class for visual feedback if needed
+        (e.target as HTMLElement).classList.add('dragging');
+      }}
+      onDragEnd={(e) => {
+        (e.target as HTMLElement).classList.remove('dragging');
+      }}
       style={spriteStyle}
     >
-      {!isFaceDown && !card.sprite && (
-        <div className="card-fallback">
-          <div className="card-header">
-            <span className="card-number">{card.isGoalie ? 'G' : card.number}</span>
-          </div>
-          <div className="card-body">
-            <div className="card-name">{card.name}</div>
-          </div>
-          <div className="card-footer">
-            <div className="card-abilities">
-              {card.abilities.map((ability, i) => (
-                <div 
-                  key={i} 
-                  className="ability-dot" 
-                  style={{ backgroundColor: ABILITY_COLORS[ability] }}
-                />
-              ))}
-            </div>
-            <span className="card-points">{card.points}</span>
-          </div>
-        </div>
-      )}
-      
-      {/* Name Label below the card image */}
-      {!isFaceDown && (
-        <div className="card-name-label">{card.name}</div>
-      )}
+      {/* Text overlays removed per user request */}
+
 
       <style>{`
         .card {
@@ -106,33 +78,6 @@ export const Card: React.FC<CardProps> = ({ card, onClick, disabled, isFaceDown 
           cursor: not-allowed; 
           transform: none; 
         }
-        .card-name-label {
-          position: absolute;
-          bottom: -22px;
-          left: 0;
-          right: 0;
-          text-align: center;
-          font-size: 11px;
-          font-weight: 800;
-          color: #fff;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-          pointer-events: none;
-        }
-        .card-fallback {
-            padding: 10px;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-        }
-        .card-header { display: flex; justify-content: space-between; }
-        .card-number { font-size: 24px; font-weight: 800; color: #333; }
-        .card-body { flex: 1; display: flex; align-items: center; justify-content: center; }
-        .card-name { font-weight: 700; text-align: center; color: #555; text-transform: uppercase; }
-        .card-footer { display: flex; justify-content: space-between; align-items: center; }
-        .ability-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); }
-        .card-points { font-size: 12px; font-weight: 800; color: #999; }
       `}</style>
     </div>
   );

@@ -87,9 +87,17 @@ export interface GameState {
   activeChallenge: Challenge | null;
   activeCards: Card[];
   lastShotCard: Card | null;
+  pendingPerk: PendingPerk | null;
   isFinalMinute: boolean;
   stoppage: boolean;
   logs: string[];
+}
+
+export interface PendingPerk {
+  winner: 'home' | 'away';
+  card: Card;
+  selectedAction?: ActionType;
+  selectedAbility?: AbilityColor;
 }
 
 export interface Challenge {
