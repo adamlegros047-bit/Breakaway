@@ -4,6 +4,7 @@ import { Scoreboard } from './components/Scoreboard';
 import { PlayArea } from './components/PlayArea';
 import { PositionRoster } from './components/PositionRoster';
 import { PlayerHand } from './components/PlayerHand';
+import { useAI } from './hooks/useAI';
 import { Card } from './components/Card';
 import { StartScreen } from './components/StartScreen';
 import { FaceoffModal } from './components/FaceoffModal';
@@ -17,9 +18,16 @@ function App() {
   } = useGame();
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
+  const [isAIEnabled, setIsAIEnabled] = useState(true); // Toggle for Human vs CPU
   const [showBenchFor, setShowBenchFor] = useState<'home' | 'away' | null>(null);
   const [showDeckFor, setShowDeckFor] = useState<'home' | 'away' | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{ message: string; onConfirm: () => void } | null>(null);
+
+  useAI(
+    state,
+    { playCard, endTurn, movePuckTo },
+    isAIEnabled && hasStarted
+  );
 
   const activeBench = showBenchFor ? state[showBenchFor].bench : [];
   const activeDeckDisplay = showDeckFor ? state[showDeckFor].deck : [];
@@ -95,7 +103,15 @@ function App() {
           <PositionRoster side="home" />
           <PositionRoster side="away" />
           {/* Fixed overlays */}
-          <button className="back-btn" onClick={handleBackToStart}>← BACK</button>
+          <div className="header-controls">
+            <button className="back-btn" onClick={handleBackToStart}>← BACK</button>
+            <button 
+              className={`ai-toggle-btn ${isAIEnabled ? 'enabled' : 'disabled'}`}
+              onClick={() => setIsAIEnabled(!isAIEnabled)}
+            >
+              CPU: {isAIEnabled ? 'ON' : 'OFF'}
+            </button>
+          </div>
           <div className="global-stats">
             <div className="stat-pill">SWAPS {state.home.preFaceoffSwaps}H / {state.away.preFaceoffSwaps}A</div>
             <div className={`turn-badge ${state.turn}`}>
@@ -277,14 +293,25 @@ function App() {
         }
         .close-bench-btn:hover { background: #ff5247; }
 
-        .back-btn {
+        .header-controls {
           position: fixed; top: 16px; left: 16px; z-index: 200;
+          display: flex; gap: 8px;
+        }
+        .back-btn {
           background: #112244; border: none; color: white;
-          padding: 8px 14px; border-radius: 8px;
-          font-size: 11px; font-weight: 800; cursor: pointer;
-          transition: background 0.2s;
+          padding: 8px 16px; border-radius: 8px; cursor: pointer;
+          font-weight: 800; border: 1px solid rgba(255,255,255,0.2);
         }
         .back-btn:hover { background: #1a3060; }
+        .ai-toggle-btn {
+          background: #441111; border: none; color: white;
+          padding: 8px 16px; border-radius: 8px; cursor: pointer;
+          font-weight: 800; border: 1px solid rgba(255,0,0,0.4);
+          transition: background 0.2s, border-color 0.2s;
+        }
+        .ai-toggle-btn.enabled {
+          background: #114422; border-color: rgba(0,255,0,0.4);
+        }
 
         .global-stats {
           position: fixed; top: 16px; right: 16px; z-index: 200;

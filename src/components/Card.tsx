@@ -34,7 +34,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, disabled, isFaceDown 
       backgroundPosition: 'center',
     } : card.sprite ? {
       backgroundImage: `url(/cards/sheet${card.sprite.sheet}.png)`,
-      backgroundPosition: `${card.sprite.x * 11.111}% ${card.sprite.y * 14.286}%`,
+      backgroundPosition: `${card.sprite.x * 11.111}% ${(card.sprite.y * 14.286) + (card.name === 'Skating' ? 2 : 0)}%`,
       backgroundSize: '1000% 800%',
     } : {}
   ) : (
