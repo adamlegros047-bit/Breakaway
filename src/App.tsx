@@ -9,15 +9,18 @@ import { Card } from './components/Card';
 import { StartScreen } from './components/StartScreen';
 import { FaceoffModal } from './components/FaceoffModal';
 import { ConfirmModal } from './components/ConfirmModal';
+import { CardDetailModal } from './components/CardDetailModal';
 import { useGame } from './hooks/useGame';
+import type { Card as CardType } from './types';
 
 function App() {
   const { 
     state, startGame, playCard, endTurn, movePuckTo, switchWithBench, 
     startFaceoff, nextPeriod, cancelChallenge,
-    selectFaceoffReward, confirmFaceoffReward
+    selectPerk, confirmPerk
   } = useGame();
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [viewingCard, setViewingCard] = useState<CardType | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
   const [isAIEnabled, setIsAIEnabled] = useState(true); // Toggle for Human vs CPU
   const [showBenchFor, setShowBenchFor] = useState<'home' | 'away' | null>(null);
@@ -26,7 +29,7 @@ function App() {
 
   useAI(
     state,
-    { playCard, endTurn, movePuckTo },
+    { playCard, endTurn, movePuckTo, selectPerk, confirmPerk },
     isAIEnabled && hasStarted
   );
 
@@ -54,7 +57,7 @@ function App() {
   };
 
   const handleAreaClick = (area: any, side: any) => {
-    if (state.activeChallenge || state.faceoffReward) return;
+    if (state.activeChallenge || state.pendingPerk) return;
     if (selectedCardId) {
       playCard(state.turn, selectedCardId);
       setSelectedCardId(null);
@@ -89,43 +92,43 @@ function App() {
         <FaceoffModal state={state} onPlayCard={playCard} onClose={cancelChallenge} />
       )}
 
-      {state.faceoffReward && (
+      {state.pendingPerk && (
         <div className="reward-overlay">
           <div className="reward-modal">
             <div className="reward-header">
-              <h3>FACEOFF REWARD</h3>
-              <p>{state.faceoffReward.winner.toUpperCase()} Team, select your perks!</p>
+              <h3>CARD RESOLUTION</h3>
+              <p>{state.pendingPerk.winner.toUpperCase()} Team, resolve your card perks.</p>
             </div>
             <div className="reward-body">
               <div className="reward-card-preview">
-                <Card card={state.faceoffReward.card} />
+                <Card card={state.pendingPerk.card} />
               </div>
               <div className="reward-controls">
                 <div className="control-group">
                   <label>PICK 1 ACTION</label>
                   <div className="reward-options">
-                    {state.faceoffReward.card.actions.map(act => (
+                    {state.pendingPerk.card.actions.map(act => (
                       <button 
                         key={act}
-                        className={`opt-btn ${state.faceoffReward?.selectedAction === act ? 'active' : ''}`}
-                        onClick={() => selectFaceoffReward(act, undefined)}
+                        className={`opt-btn ${state.pendingPerk?.selectedAction === act ? 'active' : ''}`}
+                        onClick={() => selectPerk(act, undefined)}
                       >{act}</button>
                     ))}
-                    {state.faceoffReward.card.actions.length === 0 && <span className="no-opts">No actions available</span>}
+                    {state.pendingPerk.card.actions.length === 0 && <span className="no-opts">No actions available</span>}
                   </div>
                 </div>
                 <div className="control-group">
                   <label>PICK 1 ABILITY</label>
                   <div className="reward-options">
-                    {state.faceoffReward.card.abilities.map(ab => (
+                    {state.pendingPerk.card.abilities.map(ab => (
                       <button 
                         key={ab}
-                        className={`opt-btn ${state.faceoffReward?.selectedAbility === ab ? 'active' : ''}`}
-                        onClick={() => selectFaceoffReward(undefined, ab)}
+                        className={`opt-btn ${state.pendingPerk?.selectedAbility === ab ? 'active' : ''}`}
+                        onClick={() => selectPerk(undefined, ab)}
                         style={{'--ability-color': ab.toLowerCase()} as any}
                       >{ab}</button>
                     ))}
-                    {state.faceoffReward.card.abilities.length === 0 && <span className="no-opts">No abilities available</span>}
+                    {state.pendingPerk.card.abilities.length === 0 && <span className="no-opts">No abilities available</span>}
                   </div>
                 </div>
               </div>
@@ -134,14 +137,33 @@ function App() {
               <button 
                 className="confirm-reward-btn" 
                 disabled={
-                  (state.faceoffReward.card.actions.length > 0 && !state.faceoffReward.selectedAction) ||
-                  (state.faceoffReward.card.abilities.length > 0 && !state.faceoffReward.selectedAbility)
+                  (state.pendingPerk.card.actions.length > 0 && !state.pendingPerk.selectedAction) ||
+                  (state.pendingPerk.card.abilities.length > 0 && !state.pendingPerk.selectedAbility)
                 }
-                onClick={confirmFaceoffReward}
-              >CONFIRM REWARD</button>
+                onClick={confirmPerk}
+              >CONFIRM RESOLUTION</button>
             </div>
           </div>
         </div>
+      )}
+
+      {viewingCard && (
+        <CardDetailModal 
+          card={viewingCard}
+          onClose={() => setViewingCard(null)}
+          isPlayDisabled={
+            !hasStarted || 
+            !!state.pendingPerk || 
+            (!!state.activeChallenge && (
+              (state.turn === 'home' && !!state.activeChallenge.homeCard) ||
+              (state.turn === 'away' && !!state.activeChallenge.awayCard)
+            ))
+          }
+          onPlay={() => {
+            playCard(state.turn, viewingCard.id);
+            setViewingCard(null);
+          }}
+        />
       )}
 
       {confirmConfig && (
@@ -217,7 +239,10 @@ function App() {
                 <div className="hand-row">
                   <PlayerHand
                     player={state[state.turn]}
-                    onCardClick={(id) => setSelectedCardId(selectedCardId === id ? null : id)}
+                    onCardClick={(id) => {
+                      const card = state[state.turn].hand.find(c => c.id === id);
+                      if (card) setViewingCard(card);
+                    }}
                     selectedCardId={selectedCardId}
                     isTurn={true}
                   />
@@ -308,6 +333,17 @@ function App() {
         }
 
         /* --- Fixed Overlays --- */
+        .card-detail-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.85);
+          backdrop-filter: blur(12px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10000;
+          animation: modalFadeIn 0.3s ease-out;
+        }
         .bench-expanded-overlay {
           position: fixed; inset: 0;
           background: rgba(0,0,0,0.85);

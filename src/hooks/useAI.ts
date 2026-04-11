@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react';
-import type { GameState, Area } from '../types';
+import type { GameState, Area, ActionType, AbilityColor } from '../types';
 
 interface AIControls {
   playCard: (player: 'home' | 'away', cardId: string) => void;
   endTurn: () => void;
   movePuckTo: (area: Area, side: 'home' | 'away' | 'neutral') => void;
+  selectPerk: (action?: ActionType, ability?: AbilityColor) => void;
+  confirmPerk: () => void;
 }
 
 export const useAI = (state: GameState, controls: AIControls, isEnabled: boolean) => {
@@ -15,6 +17,23 @@ export const useAI = (state: GameState, controls: AIControls, isEnabled: boolean
 
     // Clear any pending timeouts on state change so we don't double loop
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+    // 0. Resolve Pending Perks (Action/Ability Selection)
+    if (state.pendingPerk) {
+      if (state.pendingPerk.winner === 'away') {
+        timeoutRef.current = setTimeout(() => {
+          const { card } = state.pendingPerk!;
+          const act = card.actions.length > 0 ? card.actions[0] : undefined;
+          const ab = card.abilities.length > 0 ? card.abilities[0] : undefined;
+          controls.selectPerk(act, ab);
+          
+          setTimeout(() => {
+            controls.confirmPerk();
+          }, 800);
+        }, 1200);
+      }
+      return; // Always wait for perk resolution (AI or Human) before playing next
+    }
 
     const awayHand = state.away.hand;
     if (awayHand.length === 0) return; // Nothing we can do securely without cards

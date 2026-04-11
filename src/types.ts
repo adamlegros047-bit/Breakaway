@@ -47,6 +47,7 @@ export interface Card {
   actions: ActionType[];
   abilities: AbilityColor[];
   specials: string[];
+  drawbacks?: string[];
   points: number; // For bench limit (total 85)
   symbol?: string; // e.g. "Colored #", "Dot", "O", "D", "N", "H", "A", "X", "K", "0", "P"
   restriction?: 'I' | 'II';

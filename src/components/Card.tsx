@@ -37,16 +37,6 @@ export const Card: React.FC<CardProps> = ({ card, onClick, disabled, isFaceDown 
     <div 
       className={`card ${disabled ? 'disabled' : ''} ${isFaceDown ? 'face-down' : ''}`}
       onClick={!disabled ? onClick : undefined}
-      draggable={!disabled && !isFaceDown}
-      onDragStart={(e) => {
-        e.dataTransfer.setData('cardId', card.id);
-        e.dataTransfer.effectAllowed = 'move';
-        // Add a class for visual feedback if needed
-        (e.target as HTMLElement).classList.add('dragging');
-      }}
-      onDragEnd={(e) => {
-        (e.target as HTMLElement).classList.remove('dragging');
-      }}
       style={spriteStyle}
     >
       {/* Text overlays removed per user request */}

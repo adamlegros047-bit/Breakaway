@@ -19,11 +19,6 @@ export const PlayerHand: React.FC<PlayerHandProps> = ({ player, onCardClick, sel
           <div 
             key={card.id} 
             className={`hand-card-wrapper ${selectedCardId === card.id ? 'selected' : ''}`}
-            draggable={isTurn}
-            onDragStart={(e) => {
-              e.dataTransfer.setData('cardId', card.id);
-              e.dataTransfer.setData('player', player.isHome ? 'home' : 'away');
-            }}
           >
             <Card 
               card={card} 

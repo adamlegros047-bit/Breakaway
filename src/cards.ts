@@ -5,7 +5,7 @@ export const OFFICIAL_CARDS: Card[] = [
   { id: 'block-1', name: 'Block', number: 12, suits: ['Stick'], actions: ['Block'], abilities: ['Green'], specials: [], points: 12, image: '/cards/Block.png' },
   { id: 'timeout-1', name: 'Timeout', suits: ['Helmet'], actions: [], abilities: [], specials: [], points: 5, restriction: 'I', image: '/cards/Timeout.png' },
   { id: 'miss-1', name: 'Miss', suits: [], actions: [], abilities: [], specials: [], points: 0, image: '/cards/Miss.png' },
-  { id: 'referee-1', name: 'Referee', suits: [], actions: [], abilities: [], specials: [], points: 10, restriction: 'II', image: '/cards/Official.png' },
+  { id: 'referee-1', name: 'Referee', suits: [], actions: [], abilities: [], specials: [], drawbacks: ['Game Misconduct on abuse'], points: 10, restriction: 'II', image: '/cards/Official.png' },
   { id: 'linesman-1', name: 'Linesman', suits: [], actions: [], abilities: [], specials: [], points: 10, restriction: 'II', image: '/cards/Linesman.png' },
   { id: 'bodycheck-1', name: 'Body Check', suits: ['Skate'], actions: ['Body-Check'], abilities: ['Brown'], specials: [], points: 10, sprite: { sheet: 1, x: 6, y: 0 } },
   { id: 'breakaway-1', name: 'Breakaway', suits: ['Skate'], actions: [], abilities: ['Orange'], specials: [], points: 15, image: '/cards/Breakaway.png' },
@@ -16,9 +16,9 @@ export const OFFICIAL_CARDS: Card[] = [
   { id: 'stickhandling-1', name: 'Stick Handling', number: 0, suits: ['Stick'], actions: ['Tip'], abilities: ['Red'], specials: [], points: 10, image: '/cards/Stickhandle0.png' },
   
   // ROW 3
-  { id: 'rookie-1', name: 'Rookie', number: 1, suits: ['Skate'], actions: ['Move'], abilities: [], specials: [], points: 10, image: '/cards/Rookiehelm.png' },
+  { id: 'rookie-1', name: 'Rookie', number: 1, suits: ['Skate'], actions: ['Move'], abilities: [], specials: [], drawbacks: ['-2 Power vs Veterans'], points: 10, image: '/cards/Rookiehelm.png' },
   { id: 'specialist-1', name: 'Specialist', number: 2, suits: ['Helmet'], actions: [], abilities: ['Blue'], specials: [], points: 15, image: '/cards/Specialiststick.png' },
-  { id: 'enforcer-1', name: 'Enforcer', number: 3, suits: ['Glove'], actions: ['Punch'], abilities: ['Brown'], specials: [], points: 15, image: '/cards/Enforcerglove.png' },
+  { id: 'enforcer-1', name: 'Enforcer', number: 3, suits: ['Glove'], actions: ['Punch'], abilities: ['Brown'], specials: [], drawbacks: ['2-Min High Sticking Chance'], points: 15, image: '/cards/Enforcerglove.png' },
   { id: 'sniper-1', name: 'Sniper', number: 4, suits: ['Stick'], actions: ['Shoot'], abilities: ['Blue'], specials: [], points: 20, image: '/cards/Sniperhelm.png' },
   { id: 'winger-1', name: 'Winger', number: 5, suits: ['Skate'], actions: ['Move'], abilities: [], specials: [], points: 15, image: '/cards/Wingerglove.png' },
 

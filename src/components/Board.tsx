@@ -81,7 +81,12 @@ export const Board: React.FC<BoardProps> = ({ state, onAreaClick, onNavigateZone
                 onClick={() => onAreaClick?.(parseInt(areaId) as Area, side as any)}
               >
                 <div className="node-label">{areaId === '12' ? '0' : areaId}</div>
-                {isPuckHere && <div className="puck-visual" />}
+                {isPuckHere && (
+                  <div className="puck-visual">
+                    {state.puck.possession === 'home' && <span className="possession-marker home">H</span>}
+                    {state.puck.possession === 'away' && <span className="possession-marker away">V</span>}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -170,7 +175,18 @@ export const Board: React.FC<BoardProps> = ({ state, onAreaClick, onNavigateZone
           border: 2px solid #ffcc00;
           border-radius: 50%;
           animation: puckPulse 1.5s infinite;
+          display: flex; align-items: center; justify-content: center;
+          overflow: hidden;
         }
+        .possession-marker {
+          font-weight: 950;
+          font-size: 18px;
+          line-height: 1;
+          pointer-events: none;
+        }
+        .possession-marker.home { color: #ffcc00; }
+        .possession-marker.away { color: #ffffff; }
+
         @keyframes puckPulse {
           0%   { transform: scale(1);   box-shadow: 0 0 0 0   rgba(255,204,0,0.7); }
           70%  { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(255,204,0,0); }

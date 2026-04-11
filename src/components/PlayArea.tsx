@@ -8,46 +8,17 @@ interface PlayAreaProps {
 }
 
 export const PlayArea: React.FC<PlayAreaProps> = ({ state, onCardDrop }) => {
-  const [isDragOver, setIsDragOver] = React.useState(false);
   const [isExpanded, setIsExpanded] = React.useState(false);
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const cardId = e.dataTransfer.getData('cardId');
-    if (cardId && onCardDrop) {
-      onCardDrop(cardId);
-    }
-  };
-
-  // Determine which cards to show
-  const activeCards = isExpanded 
-    ? state.activeCards.slice(-4) 
+  // Filter cards to show latest in regular view, or last 4 in expanded view
+  const displayCards = isExpanded 
+    ? state.activeCards.slice(-10) 
     : state.activeCards.slice(-1);
 
   return (
     <>
       <div 
-        className={`play-area-container ${isDragOver ? 'drag-over' : ''} ${isExpanded ? 'expanded' : ''}`}
-        onDragOver={handleDragOver}
-        onDragEnter={handleDragEnter}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        className={`play-area-container ${isExpanded ? 'expanded' : ''}`}
         onDoubleClick={() => setIsExpanded(!isExpanded)}
         title={state.activeCards.length > 1 ? "Double-click to toggle history" : ""}
       >
@@ -60,7 +31,7 @@ export const PlayArea: React.FC<PlayAreaProps> = ({ state, onCardDrop }) => {
           ) : (
             <>
               <div className="active-cards-list">
-                {activeCards.map((card, idx) => (
+                {displayCards.map((card, idx) => (
                   <div key={`${card.id}-${idx}`} className="play-card-wrapper">
                     <Card card={card} />
                   </div>
@@ -69,8 +40,8 @@ export const PlayArea: React.FC<PlayAreaProps> = ({ state, onCardDrop }) => {
               {state.activeCards.length > 1 && !isExpanded && (
                 <div className="history-hint">Double click for history (+{state.activeCards.length - 1})</div>
               )}
-              {isExpanded && state.activeCards.length > 4 && (
-                <div className="history-limit">+ {state.activeCards.length - 4} more previous</div>
+              {isExpanded && state.activeCards.length > 10 && (
+                <div className="history-limit">+ {state.activeCards.length - 10} more previous</div>
               )}
             </>
           )}
@@ -103,11 +74,6 @@ export const PlayArea: React.FC<PlayAreaProps> = ({ state, onCardDrop }) => {
           width: 170px;
           background: rgba(10, 20, 35, 0.98);
           box-shadow: -20px 20px 60px rgba(0,0,0,0.9);
-        }
-        .play-area-container.drag-over {
-          border-color: #00d1b2;
-          box-shadow: -10px 10px 30px rgba(0,209,178,0.3), inset 0 0 25px rgba(0,209,178,0.1);
-          background: rgba(0,209,178,0.05);
         }
 
         .play-area-header {
@@ -157,10 +123,6 @@ export const PlayArea: React.FC<PlayAreaProps> = ({ state, onCardDrop }) => {
           align-items: center;
         }
 
-        .expanded .active-cards-list {
-          gap: -20px; /* Slight stack overlap even in history? No, let's keep it clear. */
-        }
-
         .play-card-wrapper {
           transform: scale(0.68);
           transform-origin: center top;
@@ -179,7 +141,7 @@ export const PlayArea: React.FC<PlayAreaProps> = ({ state, onCardDrop }) => {
         }
 
         .play-card-wrapper:hover {
-          transform: scale(0.75) translateX(-8px);
+          transform: scale(0.75) translateX(-12px);
           z-index: 50;
         }
 
