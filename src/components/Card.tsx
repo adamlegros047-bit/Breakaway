@@ -39,6 +39,31 @@ export const Card: React.FC<CardProps> = ({ card, onClick, disabled, isFaceDown 
       onClick={!disabled ? onClick : undefined}
       style={spriteStyle}
     >
+      {!isFaceDown && !card.hideSuits && card.suits && card.suits.length > 0 && (
+        <>
+          <div className={`card-suits top-left multi-${card.suits.length}`} style={{ backgroundColor: card.powerPlayColor || '#EF4444' }}>
+            {card.suits.map((suit) => (
+              <img 
+                key={suit}
+                src={`/icons/suit_${suit.toLowerCase()}.png`}  
+                alt={`${suit} icon`} 
+                className="suit-img"
+              />
+            ))}
+          </div>
+          <div className={`card-suits bottom-right multi-${card.suits.length}`} style={{ backgroundColor: card.powerPlayColor || '#EF4444' }}>
+            {card.suits.map((suit) => (
+              <img 
+                key={suit}
+                src={`/icons/suit_${suit.toLowerCase()}.png`}  
+                alt={`${suit} icon`} 
+                className="suit-img"
+              />
+            ))}
+          </div>
+        </>
+      )}
+
       {/* Text overlays removed per user request */}
 
 
@@ -57,6 +82,51 @@ export const Card: React.FC<CardProps> = ({ card, onClick, disabled, isFaceDown 
           border: 1px solid rgba(0,0,0,0.1);
           overflow: visible;
           margin-bottom: 25px; /* Space for the label */
+        }
+        .card-suits {
+          position: absolute;
+          width: 33px;
+          height: 33px;
+          border-radius: 50%;
+          border: 1px solid rgba(255, 255, 255, 0.4);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.6);
+          overflow: hidden;
+          z-index: 2;
+        }
+        .card-suits.multi-1 {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 3px;
+        }
+        .card-suits.multi-2 {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          align-content: center;
+          gap: 1px;
+          padding: 4px;
+        }
+        .card-suits.multi-3, .card-suits.multi-4 {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          grid-template-rows: 1fr 1fr;
+          gap: 1px;
+          padding: 4px;
+        }
+        .card-suits.top-left {
+          top: 3px;
+          left: -1px;
+        }
+        .card-suits.bottom-right {
+          bottom: 3px;
+          right: -1px;
+          transform: rotate(180deg);
+        }
+        .suit-img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          mix-blend-mode: multiply;
         }
         .card:hover { 
           transform: translateY(-8px) scale(1.02); 

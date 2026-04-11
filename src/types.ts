@@ -53,6 +53,8 @@ export interface Card {
   restriction?: 'I' | 'II';
   sprite?: { sheet: 1 | 2; x: number; y: number };
   image?: string;
+  powerPlayColor?: string;
+  hideSuits?: boolean;
 }
 
 export interface PlayerState {

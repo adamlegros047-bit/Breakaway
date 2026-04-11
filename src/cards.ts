@@ -8,7 +8,7 @@ export const OFFICIAL_CARDS: Card[] = [
   { id: 'referee-1', name: 'Referee', suits: [], actions: [], abilities: ['Black'], specials: [], drawbacks: ['Game Misconduct on abuse'], points: 10, restriction: 'II', image: '/cards/Official.png' },
   { id: 'linesman-1', name: 'Linesman', suits: [], actions: [], abilities: ['Black'], specials: [], points: 10, restriction: 'II', image: '/cards/Linesman.png' },
   { id: 'bodycheck-1', name: 'Body Check', suits: ['Skate'], actions: ['Body-Check'], abilities: ['Brown'], specials: [], points: 10, sprite: { sheet: 1, x: 6, y: 0 } },
-  { id: 'breakaway-1', name: 'Breakaway', suits: ['Skate'], actions: [], abilities: ['Orange'], specials: ['Breakaway'], points: 15, image: '/cards/Breakaway.png' },
+  { id: 'breakaway-1', name: 'Breakaway', suits: ['Helmet', 'Skate', 'Glove', 'Stick'], actions: [], abilities: ['Orange'], specials: ['Breakaway'], points: 15, image: '/cards/Breakaway.png' },
   { id: 'elbow-1', name: 'Elbow', suits: ['Glove'], actions: ['Punch'], abilities: [], specials: ['P'], points: 5, image: '/cards/Punchhelmet.png' },
   
   // ROW 2
@@ -38,19 +38,19 @@ export const OFFICIAL_CARDS: Card[] = [
   { id: 'goalie-1', name: 'Goalie', number: 12, isGoalie: true, suits: ['Glove'], actions: ['Save', 'Block'], abilities: ['Red'], specials: [], points: 25, image: '/cards/Goalieskate.png' },
   { id: 'penaltykill-1', name: 'Penalty Kill', number: 12, suits: ['Helmet'], actions: [], abilities: ['Orange'], specials: ['K'], points: 10, image: '/cards/Penaltykill.png' },
   { id: 'score-1', name: 'Score!', number: 14, suits: ['Stick'], actions: ['Score'], abilities: ['Blue'], specials: [], points: 20, image: '/cards/Score.png' },
-  { id: 'powerplay-1', name: 'Power Play', number: 15, suits: ['Stick'], actions: [], abilities: ['Purple'], specials: [], points: 20, image: '/cards/PowerPglove.png' },
+  { id: 'powerplay-1', name: 'Power Play', number: 15, suits: ['Helmet', 'Skate', 'Glove', 'Stick'], actions: [], abilities: ['Purple'], specials: [], points: 20, image: '/cards/PowerPglove.png' },
   
   // NEW CARDS FROM USER LIST
   { id: 'pokecheck-1', name: 'Poke Check', number: 3, suits: ['Stick'], actions: ['Poke-check'], abilities: ['Yellow'], specials: [], points: 10, image: '/cards/Pokehelmet.png' },
-  { id: 'utility-faceoff', name: 'Faceoff Utility', suits: ['Helmet'], actions: [], abilities: [], specials: ['U', 'Promotion Special: Face-off'], points: 15, image: '/cards/Face-off.png' },
-  { id: 'utility-finesse', name: 'Finesse Utility', suits: ['Skate'], actions: [], abilities: [], specials: ['U', 'Promotion Special: Finesse'], points: 15, image: '/cards/Finesse.png' },
-  { id: 'utility-elite', name: 'Elite Utility', suits: ['Stick'], actions: [], abilities: [], specials: ['U', 'Promotion Special: Elite'], points: 20, image: '/cards/Elite.png' },
-  { id: 'utility-plain', name: 'Utility', suits: ['Glove'], actions: [], abilities: [], specials: ['U', 'Promotion Special: Utility'], points: 10, image: '/cards/Utility.png' },
+  { id: 'utility-faceoff', name: 'Faceoff Utility', suits: ['Helmet', 'Skate', 'Glove', 'Stick'], hideSuits: true, actions: [], abilities: [], specials: ['U', 'Promotion Special: Face-off'], points: 15, image: '/cards/Face-off.png' },
+  { id: 'utility-finesse', name: 'Finesse Utility', suits: ['Helmet', 'Skate', 'Glove', 'Stick'], hideSuits: true, actions: [], abilities: [], specials: ['U', 'Promotion Special: Finesse'], points: 15, image: '/cards/Finesse.png' },
+  { id: 'utility-elite', name: 'Elite Utility', suits: ['Helmet', 'Skate', 'Glove', 'Stick'], hideSuits: true, actions: [], abilities: [], specials: ['U', 'Promotion Special: Elite'], points: 20, image: '/cards/Elite.png' },
+  { id: 'utility-plain', name: 'Utility', suits: ['Helmet', 'Skate', 'Glove', 'Stick'], hideSuits: true, actions: [], abilities: [], specials: ['U', 'Promotion Special: Utility'], points: 10, image: '/cards/Utility.png' },
   { id: 'rush-9', name: 'Rush 9', number: 9, suits: ['Skate'], actions: [], abilities: ['Orange'], specials: [], points: 12, image: '/cards/Rushhelmglove.png' },
   { id: 'rush-10', name: 'Rush 10', number: 10, suits: ['Skate'], actions: [], abilities: ['Orange'], specials: [], points: 15, image: '/cards/Rushhelmglove.png' },
-  { id: 'shoot-puck', name: 'Shoot the Puck', number: 6, suits: ['Stick'], actions: ['Shoot'], abilities: ['Blue'], specials: [], points: 20, image: '/cards/Shootpuck.png' },
-  { id: 'goal', name: 'Goal', number: 0, suits: [], actions: [], abilities: ['Purple'], specials: [], points: 50, image: '/cards/Goalhelm.png' },
-  { id: 'crowd', name: 'Crowd', suits: [], actions: [], abilities: ['Silver'], specials: ['C', 'Crowd'], points: 5, image: '/cards/Crowd.png' },
+  { id: 'shoot-puck', name: 'Shoot the Puck', number: 6, suits: ['Helmet', 'Skate', 'Glove', 'Stick'], actions: ['Shoot'], abilities: ['Blue'], specials: [], points: 20, image: '/cards/Shootpuck.png' },
+  { id: 'goal', name: 'Goal', number: 0, suits: ['Helmet', 'Skate', 'Glove', 'Stick'], actions: [], abilities: ['Purple'], specials: [], points: 50, image: '/cards/Goalhelm.png' },
+  { id: 'crowd', name: 'Crowd', suits: ['Helmet', 'Skate', 'Glove', 'Stick'], actions: [], abilities: ['Silver'], specials: ['C', 'Crowd'], points: 5, image: '/cards/Crowd.png' },
 ];
 
 export const FULL_DECK: Card[] = [...OFFICIAL_CARDS, ...OFFICIAL_CARDS, ...OFFICIAL_CARDS].slice(0, 60);
