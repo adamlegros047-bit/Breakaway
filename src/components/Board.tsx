@@ -4,38 +4,39 @@ interface BoardProps {
   state: GameState;
   onAreaClick?: (area: Area, side: 'home' | 'away' | 'neutral') => void;
   onNavigateZone?: (direction: 'up' | 'down') => void;
+  adjacentMoveAreas?: string[]; // e.g. ['away-0', 'neutral-9']
 }
 
 export const AREA_MAP: Record<string, { x: string; y: string }> = {
-  // Home Defensive Zone (Bottom)
-  'home-1': { x: '30%', y: '74%' },
-  'home-2': { x: '70%', y: '74%' },
-  'home-3': { x: '12%', y: '82%' },
-  'home-0': { x: '35%', y: '82%' },
-  'home-12': { x: '65%', y: '82%' },
-  'home-4': { x: '88%', y: '82%' },
-  'home-5': { x: '12%', y: '93%' },
-  'home-7': { x: '50%', y: '94%' },
-  'home-8': { x: '50%', y: '90%' },
-  'home-6': { x: '88%', y: '93%' },
+  // Home Defensive Zone (Bottom) — mirrored from offensive zone
+  'home-1': { x: '70%', y: '69%' },   // Right blue line inner
+  'home-2': { x: '30%', y: '69%' },   // Left blue line inner
+  'home-3': { x: '88%', y: '78%' },   // Right point (blue line)
+  'home-0': { x: '68%', y: '83%' },   // Right face-off circle (near area 3)
+  'home-12': { x: '32%', y: '83%' },  // Left face-off circle (near area 4)
+  'home-4': { x: '12%', y: '78%' },   // Left point (blue line)
+  'home-5': { x: '82%', y: '97%' },   // Behind net right
+  'home-8': { x: '50%', y: '92%' },   // Crease (in front of goal)
+  'home-7': { x: '50%', y: '98%' },   // Behind the net (center)
+  'home-6': { x: '18%', y: '97%' },   // Behind net left
   
-  // Away Defensive Zone (Top)
-  'away-1': { x: '70%', y: '26%' },
-  'away-2': { x: '30%', y: '26%' },
-  'away-3': { x: '88%', y: '18%' },
-  'away-0': { x: '65%', y: '18%' },
-  'away-12': { x: '35%', y: '18%' },
-  'away-4': { x: '12%', y: '18%' },
-  'away-5': { x: '88%', y: '7%' },
-  'away-7': { x: '50%', y: '6%' },
-  'away-8': { x: '50%', y: '10%' },
-  'away-6': { x: '12%', y: '7%' },
+  // Away Defensive Zone (Top) — offensive zone for home
+  'away-1': { x: '70%', y: '31%' },   // Right blue line inner
+  'away-2': { x: '30%', y: '31%' },   // Left blue line inner
+  'away-3': { x: '88%', y: '22%' },   // Right point (blue line)
+  'away-0': { x: '68%', y: '17%' },   // Right face-off circle (near area 3)
+  'away-12': { x: '32%', y: '17%' },  // Left face-off circle (near area 4)
+  'away-4': { x: '12%', y: '22%' },   // Left point (blue line)
+  'away-5': { x: '82%', y: '3%' },    // Behind net right
+  'away-8': { x: '50%', y: '8%' },    // Crease (in front of goal)
+  'away-7': { x: '50%', y: '2%' },    // Behind the net (center)
+  'away-6': { x: '18%', y: '3%' },    // Behind net left
   
   'neutral-6':  { x: '22%', y: '42%' },    // 10 Left
   'neutral-7':  { x: '78%', y: '42%' },    // 10 Right
-  'neutral-10': { x: '50%', y: '42%' },    // Upper 9
+  'neutral-10': { x: '50%', y: '45%' },    // Upper 9
   'neutral-9':  { x: '50%', y: '50.00%' }, // Centre (Face-off)
-  'neutral-11': { x: '50%', y: '58%' },    // Lower 9
+  'neutral-11': { x: '50%', y: '55%' },    // Lower 9
   'neutral-8':  { x: '22%', y: '58%' },    // 11 Left
   'neutral-12': { x: '78%', y: '58%' },    // 11 Right
 
@@ -43,7 +44,7 @@ export const AREA_MAP: Record<string, { x: string; y: string }> = {
   'away-bench': { x: '87.5%', y: '94.29%' }, 
 };
 
-export const Board: React.FC<BoardProps> = ({ state, onAreaClick, onNavigateZone }) => {
+export const Board: React.FC<BoardProps> = ({ state, onAreaClick, onNavigateZone, adjacentMoveAreas = [] }) => {
   const puckY = parseFloat(AREA_MAP[`${state.puck.side}-${state.puck.area}`]?.y || '50');
   const puckKey = `${state.puck.side}-${state.puck.area}`;
 
@@ -73,10 +74,11 @@ export const Board: React.FC<BoardProps> = ({ state, onAreaClick, onNavigateZone
             if (nodeZone !== currentZone) return null;
 
             const [side, areaId] = key.split('-');
+            const isMoveTarget = adjacentMoveAreas.includes(key);
             return (
               <div 
                 key={key}
-                className={`area-node ${side} ${isPuckHere ? 'has-puck' : ''}`}
+                className={`area-node ${side} ${isPuckHere ? 'has-puck' : ''} ${isMoveTarget ? 'move-target' : ''}`}
                 style={{ left: pos.x, top: pos.y }}
                 onClick={() => onAreaClick?.(parseInt(areaId) as Area, side as any)}
               >
@@ -152,20 +154,35 @@ export const Board: React.FC<BoardProps> = ({ state, onAreaClick, onNavigateZone
           position: absolute;
           width: 44px; height: 44px;
           border-radius: 50%;
-          border: 2px solid rgba(255,255,255,0.15);
+          border: none;
           transform: translate(-50%, -50%);
           display: flex; align-items: center; justify-content: center;
           cursor: pointer;
           transition: all 0.25s ease;
           z-index: 10;
-          background: rgba(0,0,0,0.2);
+          background: transparent;
         }
         .area-node:hover {
-          background: rgba(255,255,255,0.08);
-          border-color: rgba(255,255,255,0.4);
-          transform: translate(-50%, -50%) scale(1.12);
+          background: rgba(255,255,255,0.06);
         }
-        .node-label { font-size: 11px; font-weight: 900; color: rgba(255,255,255,0.2); }
+
+        /* Move target: glowing destination node */
+        .area-node.move-target {
+          background: rgba(255, 220, 0, 0.18);
+          border: 2px solid rgba(255, 220, 0, 0.85);
+          box-shadow: 0 0 14px rgba(255, 220, 0, 0.6);
+          animation: moveTargetPulse 1.2s infinite;
+        }
+        .area-node.move-target:hover {
+          background: rgba(255, 220, 0, 0.32);
+          border-color: #ffdc00;
+        }
+        @keyframes moveTargetPulse {
+          0%   { box-shadow: 0 0 10px rgba(255, 220, 0, 0.5); }
+          50%  { box-shadow: 0 0 22px rgba(255, 220, 0, 0.9); }
+          100% { box-shadow: 0 0 10px rgba(255, 220, 0, 0.5); }
+        }
+        .node-label { display: none; }
 
         .has-puck { border-color: #ffcc00; box-shadow: 0 0 20px rgba(255,204,0,0.5); }
         .puck-visual {

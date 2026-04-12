@@ -83,3 +83,12 @@ A turn ends after:
 *   Play through **3 Periods**.
 *   The team with the **highest score** on the Jumbotron at the end of the 3rd period wins.
 *   If tied, the game moves to **Overtime**.
+
+---
+
+## 9. The Play Area & Discard Rule
+The **Play Area** is the shared space where cards are placed after being played. Cards remain visible in the play area until the turn ends or a special effect removes them.
+
+*   When a card leaves the play area — whether at end of turn, via a special (e.g. **You Missed**), or any other effect — it goes into the **respective player's own discard pile**. Each player's cards always return to that player's discard, never the opponent's.
+*   The discard pile is face-up and accessible for reference at any time.
+*   When a player's deck is empty, their discard pile is shuffled and becomes their new deck.

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Board, AREA_MAP } from './components/Board';
 import { Scoreboard } from './components/Scoreboard';
 import { PlayArea } from './components/PlayArea';
@@ -10,7 +10,10 @@ import { StartScreen } from './components/StartScreen';
 import { FaceoffModal } from './components/FaceoffModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { CardDetailModal } from './components/CardDetailModal';
+import { ResolutionPanel } from './components/ResolutionPanel';
+import type { ResolutionItem } from './components/ResolutionPanel';
 import { useGame } from './hooks/useGame';
+import { getAdjacentAreas } from './logic/adjacency';
 import type { Card as CardType } from './types';
 
 function App() {
@@ -22,10 +25,47 @@ function App() {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [viewingCard, setViewingCard] = useState<CardType | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
-  const [isAIEnabled, setIsAIEnabled] = useState(true); // Toggle for Human vs CPU
+  const [isAIEnabled, setIsAIEnabled] = useState(true);
   const [showBenchFor, setShowBenchFor] = useState<'home' | 'away' | null>(null);
   const [showDeckFor, setShowDeckFor] = useState<'home' | 'away' | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const [pendingMove, setPendingMove] = useState<string[] | null>(null);
+  const [pendingFaceoffPullback, setPendingFaceoffPullback] = useState<{ winner: 'home' | 'away'; options: string[] } | null>(null);
+  const [faceoffJustWon, setFaceoffJustWon] = useState<'home' | 'away' | null>(null);
+  const [resolutionQueue, setResolutionQueue] = useState<ResolutionItem[]>([]);
+  const [resolvingCardName, setResolvingCardName] = useState<string>('');
+
+  // Refs to track previous state for transition detection
+  const prevChallengeRef = useRef(state.activeChallenge);
+  const prevPerkRef = useRef(state.pendingPerk);
+
+  // Detect when a faceoff challenge resolves
+  useEffect(() => {
+    const prev = prevChallengeRef.current;
+    prevChallengeRef.current = state.activeChallenge;
+    if (prev?.type === 'Face-off' && state.activeChallenge === null && state.puck.possession) {
+      setFaceoffJustWon(state.puck.possession);
+    }
+  }, [state.activeChallenge]);
+
+  // After perk is confirmed, offer the pullback move
+  useEffect(() => {
+    const prev = prevPerkRef.current;
+    prevPerkRef.current = state.pendingPerk;
+    if (prev !== null && state.pendingPerk === null && faceoffJustWon) {
+      const adjacent = getAdjacentAreas(state.puck.area, state.puck.side);
+      const currentY = parseFloat(AREA_MAP[`${state.puck.side}-${state.puck.area}`]?.y || '50');
+      // Home winner pulls toward own (bottom) net = higher y; Away toward top net = lower y
+      const pullbackOptions = adjacent.filter(key => {
+        const areaY = parseFloat(AREA_MAP[key]?.y || '50');
+        return faceoffJustWon === 'home' ? areaY > currentY : areaY < currentY;
+      });
+      if (pullbackOptions.length > 0) {
+        setPendingFaceoffPullback({ winner: faceoffJustWon, options: pullbackOptions });
+      }
+      setFaceoffJustWon(null);
+    }
+  }, [state.pendingPerk, faceoffJustWon]);
 
   useAI(
     state,
@@ -56,9 +96,49 @@ function App() {
     });
   };
 
+  // Apply a single resolution item immediately
+  const applyResolutionItem = (item: ResolutionItem) => {
+    if (item.type === 'action' && item.value === 'Move') {
+      const adjacent = getAdjacentAreas(state.puck.area, state.puck.side);
+      setPendingMove(adjacent);
+    }
+    // Shoot, abilities, specials: logged via pendingPerk/existing game flow
+    // Future: add effect handlers here per type
+  };
+
   const handleAreaClick = (area: any, side: any) => {
     if (state.activeChallenge || state.pendingPerk) return;
+
+    // Faceoff pullback: winner chooses optional 1-step move toward own net
+    if (pendingFaceoffPullback) {
+      const key = `${side}-${area}`;
+      if (pendingFaceoffPullback.options.includes(key)) {
+        movePuckTo(area, side);
+      }
+      setPendingFaceoffPullback(null);
+      return;
+    }
+
+    // If awaiting move destination from a Move card
+    if (pendingMove !== null) {
+      const key = `${side}-${area}`;
+      if (pendingMove.includes(key)) {
+        movePuckTo(area, side);
+      }
+      setPendingMove(null);
+      return;
+    }
+
     if (selectedCardId) {
+      const card = state[state.turn].hand.find(c => c.id === selectedCardId);
+      if (card?.actions.includes('Move')) {
+        // Enter move-selection mode: compute adjacent areas and wait for board click
+        const adjacent = getAdjacentAreas(state.puck.area, state.puck.side);
+        setPendingMove(adjacent);
+        setSelectedCardId(null);
+        playCard(state.turn, selectedCardId);
+        return;
+      }
       playCard(state.turn, selectedCardId);
       setSelectedCardId(null);
     } else {
@@ -159,9 +239,26 @@ function App() {
               (state.turn === 'away' && !!state.activeChallenge.awayCard)
             ))
           }
-          onPlay={() => {
+          onPlay={(selection) => {
             playCard(state.turn, viewingCard.id);
+            const cardName = viewingCard.name;
             setViewingCard(null);
+
+            const items: ResolutionItem[] = [
+              ...selection.actions.map(v => ({ type: 'action' as const, value: v })),
+              ...selection.abilities.map(v => ({ type: 'ability' as const, value: v })),
+              ...selection.specials.map(v => ({ type: 'special' as const, value: v })),
+            ];
+
+            if (items.length === 1) {
+              // Single selection: apply immediately, no resolution screen
+              applyResolutionItem(items[0]);
+            } else if (items.length > 1) {
+              // Multiple selections: queue for sequential resolution
+              setResolutionQueue(items);
+              setResolvingCardName(cardName);
+            }
+            // 0 items: card plays with no effects
           }}
         />
       )}
@@ -171,6 +268,26 @@ function App() {
           message={confirmConfig.message}
           onConfirm={confirmConfig.onConfirm}
           onCancel={() => setConfirmConfig(null)}
+        />
+      )}
+
+      {resolutionQueue.length > 0 && (
+        <ResolutionPanel
+          cardName={resolvingCardName}
+          queue={resolutionQueue}
+          onActivate={(item) => {
+            // Find and remove the FIRST matching item in the queue
+            setResolutionQueue(prev => {
+              const idx = prev.findIndex(q => q.type === item.type && q.value === item.value);
+              if (idx === -1) return prev;
+              return prev.filter((_, i) => i !== idx);
+            });
+            applyResolutionItem(item);
+          }}
+          onDone={() => {
+            setResolutionQueue([]);
+            setResolvingCardName('');
+          }}
         />
       )}
 
@@ -221,7 +338,61 @@ function App() {
               state={state}
               onAreaClick={handleAreaClick}
               onNavigateZone={handleNavigateZone}
+              adjacentMoveAreas={pendingFaceoffPullback?.options ?? pendingMove ?? []}
             />
+
+            {/* Move destination prompt */}
+            {pendingMove !== null && (
+              <div style={{
+                position: 'absolute',
+                bottom: '8px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'rgba(255,220,0,0.92)',
+                color: '#111',
+                fontWeight: 900,
+                fontSize: '13px',
+                letterSpacing: '0.05em',
+                padding: '7px 18px',
+                borderRadius: '20px',
+                zIndex: 100,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+                pointerEvents: 'none',
+              }}>
+                🏒 SELECT DESTINATION — click a glowing node
+                <button
+                  onClick={() => setPendingMove(null)}
+                  style={{ marginLeft: 12, background: 'none', border: '1px solid #111', borderRadius: 8, padding: '2px 8px', cursor: 'pointer', fontWeight: 800, pointerEvents: 'all' }}
+                >✕ Cancel</button>
+              </div>
+            )}
+
+            {/* Faceoff pullback prompt */}
+            {pendingFaceoffPullback !== null && (
+              <div style={{
+                position: 'absolute',
+                bottom: '8px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'rgba(0,200,120,0.95)',
+                color: '#fff',
+                fontWeight: 900,
+                fontSize: '13px',
+                letterSpacing: '0.05em',
+                padding: '7px 18px',
+                borderRadius: '20px',
+                zIndex: 100,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+                pointerEvents: 'none',
+                whiteSpace: 'nowrap',
+              }}>
+                ✅ {pendingFaceoffPullback.winner.toUpperCase()} WON — pull puck toward your net, or
+                <button
+                  onClick={() => setPendingFaceoffPullback(null)}
+                  style={{ marginLeft: 12, background: 'none', border: '1px solid #fff', borderRadius: 8, padding: '2px 10px', cursor: 'pointer', fontWeight: 800, color: '#fff', pointerEvents: 'all' }}
+                >Leave it here</button>
+              </div>
+            )}
 
             {/* Hand Dock with outside deck indicators */}
             <div className="hand-dock-wrapper">
