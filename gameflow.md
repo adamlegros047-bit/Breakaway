@@ -76,6 +76,7 @@ A turn ends after:
 2.  The active player triggers "End Turn".
 *   **Drawing**: You automatically draw back up to your hand size (usually 5) at the end of your turn.
 *   **Switching**: Possession stays with the player until they lose a challenge or end their sequence.
+*   **Colour Abilities**: The actions granted by a card's colour ability (e.g. Blue → Move, On-Net, Score) are **automatically available** when that card is played. They do not need to be selected in the card prompt — they are always queued into the resolution sequence alongside any chosen actions and specials.
 
 ---
 

@@ -17,7 +17,7 @@ Each card in **Breakaway** may carry a colored ability that grants a special bon
 ---
 
 ## 🔵 Blue — Offensive Push
-**Effect:** Grants the following abilities: **Move action** (advance the puck one zone), **On-Net** (place the puck on net), and **Score** (attempt to score).
+**Effect:** Grants the **Move** action (advance the puck one area), **On-Net** (starts the On a Shot phase), and **Score** (score a goal on a shot card).
 
 | Card | Number | Action |
 | :--- | :---: | :--- |
@@ -136,7 +136,7 @@ Each card in **Breakaway** may carry a colored ability that grants a special bon
 | Color | Effect Summary | # of Cards |
 | :--- | :--- | :---: |
 | 🟡 Yellow | Initiate or participate in a Grind challenge | 4 |
-| 🔵 Blue | Grants Move, On-Net, and Score abilities | 3 |
+| 🔵 Blue | Grants Move action, On-Net, and Score abilities | 3 |
 | 🟢 Green | Stop the last puck movement + Clone action | 2 |
 | 🔴 Red | Dump Challenge + Call-up & Cycle specials | 10 |
 | 🟤 Brown | Grants the Body-Check action | 1 |

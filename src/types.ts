@@ -91,9 +91,20 @@ export interface GameState {
   activeCards: Card[];
   lastShotCard: Card | null;
   pendingPerk: PendingPerk | null;
+  pendingShot: { shooter: 'home' | 'away' } | null; // Tracks the interactive shot phase
+  lastPlayerCardNumber: number | null; // Tracks the face value of the last played Player Card (1-7)
   isFinalMinute: boolean;
   stoppage: boolean;
+  lastPlay: PlayEvent | null;
   logs: string[];
+}
+
+export interface PlayEvent {
+  player: 'home' | 'away';
+  type: 'Move' | 'Score';
+  originArea?: Area;
+  originSide?: 'home' | 'away' | 'neutral';
+  distance?: number;
 }
 
 export interface PendingPerk {

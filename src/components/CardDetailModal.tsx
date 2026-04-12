@@ -4,7 +4,6 @@ import { Card } from './Card';
 
 interface CardPlaySelection {
   actions: ActionType[];
-  abilities: AbilityColor[];
   specials: string[];
 }
 
@@ -13,11 +12,11 @@ interface CardDetailModalProps {
   onPlay: (selection: CardPlaySelection) => void;
   onClose: () => void;
   isPlayDisabled?: boolean;
+  pendingShot?: boolean;
 }
 
-export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, onPlay, onClose, isPlayDisabled }) => {
-  const [selectedActions, setSelectedActions] = useState<Set<ActionType>>(new Set(card.actions));
-  const [selectedAbilities, setSelectedAbilities] = useState<Set<AbilityColor>>(new Set(card.abilities));
+export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, onPlay, onClose, isPlayDisabled, pendingShot }) => {
+  const [selectedActions, setSelectedActions] = useState<Set<ActionType>>(new Set(card.actions.filter(a => a !== 'Score' || pendingShot)));
   const [selectedSpecials, setSelectedSpecials] = useState<Set<string>>(new Set(card.specials));
 
   const toggle = <T extends string>(set: Set<T>, item: T, setter: (s: Set<T>) => void) => {
@@ -29,12 +28,11 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, onPlay, 
   const handlePlay = () => {
     onPlay({
       actions: Array.from(selectedActions),
-      abilities: Array.from(selectedAbilities),
       specials: Array.from(selectedSpecials),
     });
   };
 
-  const anySelected = selectedActions.size > 0 || selectedAbilities.size > 0 || selectedSpecials.size > 0;
+  const anySelected = selectedActions.size > 0 || selectedSpecials.size > 0;
 
   return (
     <div className="card-detail-overlay">
@@ -64,29 +62,38 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, onPlay, 
                 <div className="detail-section">
                   <h4 className="section-title">ACTIONS</h4>
                   <div className="tag-cloud">
-                    {card.actions.map(a => (
-                      <button
-                        key={a}
-                        className={`act-tag selectable ${selectedActions.has(a) ? 'selected' : ''}`}
-                        onClick={() => toggle(selectedActions, a, setSelectedActions)}
-                      >{a}</button>
-                    ))}
+                    {card.actions.map(act => {
+                      const isDisabled = act === 'Score' && !pendingShot;
+                      return (
+                        <button
+                          key={act}
+                          className={`act-tag selectable ${selectedActions.has(act) ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
+                          onClick={() => {
+                            if (!isDisabled) {
+                              toggle(selectedActions, act, setSelectedActions);
+                            }
+                          }}
+                          disabled={isDisabled}
+                          title={isDisabled ? "Score can only be played during an active Shot phase." : undefined}
+                        >{act}</button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
-              {/* Abilities */}
+              {/* Abilities — auto-granted by colour, not selectable */}
               {card.abilities.length > 0 && (
                 <div className="detail-section">
-                  <h4 className="section-title">ABILITIES</h4>
+                  <h4 className="section-title">ABILITIES <span className="auto-badge">AUTO</span></h4>
                   <div className="tag-cloud">
                     {card.abilities.map(a => (
-                      <button
+                      <span
                         key={a}
-                        className={`ab-tag selectable ${selectedAbilities.has(a) ? 'selected' : ''}`}
+                        className="ab-tag auto-granted"
                         style={{'--ab-color': a.toLowerCase()} as any}
-                        onClick={() => toggle(selectedAbilities, a, setSelectedAbilities)}
-                      >{a}</button>
+                        title="Granted automatically when this card is played"
+                      >{a}</span>
                     ))}
                   </div>
                 </div>
@@ -122,8 +129,8 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, onPlay, 
             <div className="detail-footer">
               <div className="selection-summary">
                 {anySelected
-                  ? `Playing: ${[...selectedActions, ...selectedAbilities, ...selectedSpecials].join(', ')}`
-                  : 'Playing card with no abilities selected'}
+                  ? `Playing: ${[...selectedActions, ...selectedSpecials].join(', ')}`
+                  : 'Playing card with no actions selected'}
               </div>
               <button
                 className={`play-card-btn ${isPlayDisabled ? 'disabled' : ''}`}
@@ -247,7 +254,27 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, onPlay, 
         .selectable:hover { opacity: 0.85; }
 
         .act-tag.selected  { border-color: #4fc3f7; background: rgba(79,195,247,0.15); color: #4fc3f7; }
-        .ab-tag.selected   { border-color: var(--ab-color); background: rgba(255,255,255,0.08); }
+        .act-tag.disabled  { opacity: 0.3; cursor: not-allowed; border-color: rgba(255,255,255,0.2); }
+        .ab-tag.auto-granted {
+          opacity: 1;
+          border: 1.5px solid var(--ab-color);
+          background: rgba(255,255,255,0.06);
+          color: #fff;
+          cursor: default;
+        }
+        .auto-badge {
+          display: inline-block;
+          font-size: 8px;
+          font-weight: 800;
+          letter-spacing: 1px;
+          background: rgba(0,220,120,0.2);
+          color: #00dc78;
+          border: 1px solid #00dc78;
+          border-radius: 4px;
+          padding: 1px 5px;
+          margin-left: 6px;
+          vertical-align: middle;
+        }
         .spec-tag.selected { border-color: #ffcc00; background: rgba(255,204,0,0.12); color: #ffcc00; }
 
         .detail-list { margin: 0; padding: 0; list-style: none; font-size: 13px; color: rgba(255,255,255,0.8); }

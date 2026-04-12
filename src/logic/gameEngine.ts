@@ -63,6 +63,9 @@ export const createInitialGameState = (): GameState => {
     activeCards: [],
     lastShotCard: null,
     pendingPerk: null,
+    pendingShot: null,
+    lastPlayerCardNumber: null,
+    lastPlay: null,
     isFinalMinute: false,
     stoppage: true, // Start with a stoppage for the opening face-off
     logs: ['Game started. Ready for opening face-off.'],

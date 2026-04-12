@@ -54,3 +54,31 @@ export const getAdjacentAreas = (area: Area, side: 'home' | 'away' | 'neutral'):
   const key = `${side}-${area}`;
   return ADJACENCY[key] ?? [];
 };
+
+/** Returns all area keys reachable within `maxHops` steps (BFS), excluding the start node. */
+export const getAreasWithinHops = (
+  area: Area,
+  side: 'home' | 'away' | 'neutral',
+  maxHops: number
+): string[] => {
+  const start = `${side}-${area}`;
+  const visited = new Set<string>([start]);
+  let frontier = [start];
+
+  for (let hop = 0; hop < maxHops; hop++) {
+    const next: string[] = [];
+    for (const node of frontier) {
+      const neighbors = ADJACENCY[node] ?? [];
+      for (const n of neighbors) {
+        if (!visited.has(n)) {
+          visited.add(n);
+          next.push(n);
+        }
+      }
+    }
+    frontier = next;
+  }
+
+  visited.delete(start);
+  return Array.from(visited);
+};

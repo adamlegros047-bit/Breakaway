@@ -9,16 +9,16 @@ This document defines every **Action** that appears on Breakaway cards — what 
 | Action | Summary |
 | :--- | :--- |
 | **Move** | Advances the puck one area toward the opponent's net |
-| **Shoot** | Initiates a Shot on Goal challenge against the opponent's goalie |
+| **Shoot** | Starts the **On a Shot** phase — the next card played becomes the shot card |
 | **Save** | Defends against a Shot on Goal challenge |
 | **Block** | Stops the last puck movement or negates an incoming action |
-| **Body-Check** | Initiates a physical challenge to steal possession of the puck |
-| **Poke-check** | Attempts to strip possession from the puck-carrier without a full body challenge |
+| **Body-Check** | When played by the non-puck-holder, transfers puck possession to them after the action resolves |
+| **Poke-check** | Steals possession and moves the puck 1 area toward own net; penalises if played against a Player or Goalie card |
 | **Deflect** | Redirects a shot or pass, changing the puck's path or destination |
 | **Tip** | Tips a shot or pass at the net from close range without a full Shoot action |
 | **Intercept** | Cuts off a pass or movement to steal possession during the opponent's turn |
-| **Stretch Pass** | Moves the puck directly to an area two spaces away, bypassing intermediate zones |
-| **On-Net** | Places the puck in a scoring position without triggering a full Shot challenge |
+| **Stretch Pass** | Moves the puck up to **2 areas** away in any valid direction |
+| **On-Net** | Starts the **On a Shot** phase (same as Shoot, alternate trigger) |
 | **Score** | Scores a goal directly, bypassing the Shot vs. Save challenge |
 | **Punch** | Initiates a fighting challenge (minor penalty risk); used by enforcers and elbow cards |
 | **Substitution** | Swaps a card in hand with a card on the bench outside of a normal line change |
@@ -36,7 +36,12 @@ The standard puck-advancement action. When played, the player selects one adjace
 ---
 
 ### Shoot
-Initiates a **Shot on Goal** challenge. Requires the puck to be in the Offensive Zone and at least **1 Passing Bonus** accumulated. The opponent must respond with a `Save` capable card. Higher value wins; ties go to the goalie (Save).
+Activates the **On a Shot** phase. The Shoot action does not immediately resolve anything — instead it signals that the player is taking a shot, and the **next card they play** becomes the **shot card**.
+
+- A goal can **only** be scored on a shot card. The `Score` action has no effect unless the game is in the On a Shot phase.
+- If the shot card contains a `Score` action, a goal is awarded immediately.
+- If the shot card does **not** contain a `Score` action, the shot misses and play continues.
+- The On a Shot phase ends as soon as the shot card is played, regardless of outcome.
 
 ---
 
@@ -53,17 +58,29 @@ Can be used in two ways:
 ---
 
 ### Body-Check
-Initiates a **Grind/Check challenge**. Both players play a card; higher number wins possession of the puck. A successful Body-Check also advances the puck one area toward the checker's net. Failure leaves the puck where it is.
+Can only be meaningfully played by the player who **does not currently have possession** of the puck. When a Body-Check action is played and resolves, **puck possession transfers to the player who played it**.
+
+- The puck remains in its current area — no automatic movement occurs as part of the check.
+- If the player already has possession, the action has no additional effect.
+- This represents a physical challenge winning the puck back from the carrier.
 
 ---
 
 ### Poke-check
-A lightweight defensive action that does not initiate a full challenge. The player attempts to steal the puck from the current ball-carrier. If the puck-carrier cannot respond with a card of equal or higher number this turn, possession transfers.
+Takes possession of the puck and retreats it **1 area toward the poke-checking player's own net**. The puck is moved to the adjacent area closest to the defending player's defensive zone.
+
+- Possession transfers immediately to the player who played the Poke-check card.
+- The player selects the destination from the highlighted adjacent nodes pointing toward their own net.
+- **Penalty rule:** If the Poke-check is played against a **Player Card (numbers 1–7)** or a **Goalie card**, the card's owner receives a **2-minute minor penalty**. The poke-checking player is penalised for slashing, regardless of whether possession was gained.
 
 ---
 
 ### Deflect
-Changes the puck's current trajectory or destination. Can redirect a `Shoot` action, turning an on-goal shot into an adjacent net-area placement. Can also deflect a `Move` to a different adjacent area.
+A reactionary action that allows a player to manipulate the opponent's previous play. Deflect functions retroactively: it is played on the *subsequent* turn and reaches back to alter the opponent's last action.
+
+- **If played after an Opponent's Move/Stretch Pass**: The puck is immediately snapped back to its origin. The Deflecting player then selects a new destination node from that origin, constrained by the same distance (e.g., 1 hop for a normal Move, 2 hops for a Stretch Pass). The opponent retains possession at the new destination.
+- **If played after an Opponent's Goal (Score)**: The score is reverted. The game is whistled dead for a stoppage ("shot deflected out of play"). 
+- **Deflected Shot Face-offs:** When a shot is deflected out of play, the ensuing face-off takes place in the offensive zone where the shot originated. Specifically, the puck is placed at the `0` (or `12`) face-off dot on the side matching the shot's origin area.
 
 ---
 
@@ -78,17 +95,28 @@ Played on the **opponent's turn** in response to a `Move` or `Stretch Pass`. If 
 ---
 
 ### Stretch Pass
-Moves the puck **two areas** in one action, bypassing intermediate nodes. Useful for breaking out of the defensive zone quickly or connecting across the neutral zone. Cannot skip zone boundaries (e.g., cannot stretch from defensive directly to offensive zone in one play).
+Allows the player to move the puck to **any area within 2 adjacency steps** of its current position. This includes both directly adjacent areas (1 step) and areas reachable in 2 steps through the rink layout.
+
+- The destination must be reachable within 2 hops along the adjacency map — it cannot teleport across unconnected areas.
+- Useful for breaking out of the defensive zone quickly, skipping through the neutral zone, or setting up in the offensive zone faster than a standard Move would allow.
+- The player selects the destination by clicking a highlighted node on the board, just like a Move action.
 
 ---
 
 ### On-Net
-Places the puck in scoring position (area 8, the Crease) without consuming a Passing Bonus. Does **not** trigger a Shot challenge — it simply repositions the puck for a subsequent `Shoot` or `Tip` play.
+Starts the **On a Shot** phase, identical in effect to the `Shoot` action. The next card played by the player becomes the **shot card**, and a goal can only be scored on that shot card.
+
+- On-Net and Shoot are functionally equivalent for triggering shot phase.
+- On-Net may represent a shorter, closer-range shot — mechanically it enters the same phase.
+- The shot card must contain a `Score` action for a goal to be awarded.
 
 ---
 
 ### Score
-Scores a goal **directly** without requiring a Shot vs. Save challenge. Rare and powerful. The goal is awarded immediately, a stoppage is called, and play restarts with a faceoff at centre ice.
+Awards a goal immediately. **The `Score` action can only be played if the game is currently in the "On a Shot" phase.** 
+
+- If there is no active shot card phase (e.g. the player has not played a `Shoot` or `On-Net` action prior), the `Score` action is disabled and will have no effect.
+- Bypasses the traditional Shot vs. Save challenge — if a card with `Score` is played, it scores directly (unless subsequently `Deflect`ed by the opponent on the next turn).
 
 ---
 

@@ -159,7 +159,7 @@ When played on a Player Card (1–7), grants that card the **🟠 Orange ability
 
 When played on a Player Card (1–7), grants that card the **🔵 Blue ability**.
 
-- Blue: Grants the Move, On-Net, and Score abilities associated with the Blue colour.
+- Blue: Grants the **Move** action (advance puck one area), **On-Net** (starts the On a Shot phase), and **Score** (score a goal on a shot card).
 - The promoted Player Card's number is shown with a **blue colour overlay** in the position grid tab.
 
 ---

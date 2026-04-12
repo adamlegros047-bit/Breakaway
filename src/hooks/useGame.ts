@@ -6,11 +6,12 @@ type GameAction =
   | { type: 'START_GAME' }
   | { type: 'PLAY_CARD', player: 'home' | 'away', cardId: string }
   | { type: 'MOVE_PUCK', area: number }
-  | { type: 'SHOOT' }
+  | { type: 'BEGIN_SHOT_PHASE' }
   | { type: 'SHOT_CARD', card: Card }
   | { type: 'SCORE' }
   | { type: 'SAVE' }
-  | { type: 'MOVE_PUCK_TO', area: Area, side: 'home' | 'away' | 'neutral' }
+  | { type: 'MOVE_PUCK_TO', area: Area, side: 'home' | 'away' | 'neutral', record?: { originArea: Area, originSide: 'home' | 'away' | 'neutral', distance: number } }
+  | { type: 'REVERT_SCORE_AND_DEFLECT', scoringTeam: 'home' | 'away', originArea: Area, originSide: 'home' | 'away' | 'neutral' }
   | { type: 'END_TURN' }
   | { type: 'START_FACEOFF' }
   | { type: 'CANCEL_CHALLENGE' }
@@ -97,25 +98,55 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
         }
       }
 
-      // Handle Shot Initiation
-      if (card.actions.includes('Shoot')) {
+      // Track lastPlayerCardNumber
+      if (card.number !== undefined && card.number >= 1 && card.number <= 7) {
+        newState.lastPlayerCardNumber = card.number;
+      }
+
+      // Continuous Shot Phase Logic
+      if (state.pendingShot) {
+        if (state.pendingShot.shooter === action.player) {
+          // Attacker reacting to the defender's shot card
+          if (card.actions.includes('Score')) {
+            const newStateAfterShot = { ...newState, pendingShot: null };
+            return gameReducer(newStateAfterShot, { type: 'SCORE' });
+          } else if (card.actions.includes('Tip')) {
+            // Reverts the defender's play (handled in App.tsx loop) & keeps shot taking alive
+            newState.logs = [...newState.logs, `Tip! ${player.name} forces opponent to play a new shot card.`];
+            newState.pendingPerk = { winner: action.player, card };
+          } else {
+            // Miss! 
+            newState.pendingShot = null;
+            const dropArea = newState.lastPlayerCardNumber || 0;
+            const offZone = action.player === 'home' ? 'away' : 'home';
+            newState.puck = {
+               area: dropArea as any,
+               side: offZone,
+               possession: null
+            };
+            newState.logs = [...newState.logs, `Shot MISSED! Puck bounces to ${offZone} zone area ${dropArea}.`];
+            // Play continues normally with their newly played card
+            newState.pendingPerk = { winner: action.player, card };
+          }
+        } else {
+          // Defender's turn. This is officially the "Shot Card".
+          newState.lastShotCard = card;
+          newState.logs = [...newState.logs, `${player.name} played the Shot Card. Attacker responding...`];
+          newState.pendingPerk = { winner: action.player, card };
+        }
+        
         return {
           ...newState,
-          phase: 4, 
-          activeChallenge: {
-            type: 'Shot',
-            initiator: action.player,
-            area: state.puck.area,
-            homeCard: action.player === 'home' ? card : null,
-            awayCard: action.player === 'away' ? card : null,
-            status: 'pending'
-          },
-          logs: [...newState.logs, "🚨 SHOT ON GOAL! Goalie must save!"]
+          phase: 3
         };
       }
 
+      // Score action outside of shot phase has no effect
       if (card.actions.includes('Score')) {
-        return gameReducer(newState, { type: 'SCORE' });
+        return {
+          ...newState,
+          logs: [...newState.logs, `❌ Score requires a Shoot action first.`]
+        };
       }
 
       // If NOT a challenge-starting card, trigger Perk Selection immediately
@@ -149,17 +180,11 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
       };
     }
 
-    case 'SHOOT': {
-      if (state.passingBonusMap[state.turn] < 1) {
-        return {
-          ...state,
-          logs: [...state.logs, "Need at least 1 passing bonus to shoot!"]
-        };
-      }
+    case 'BEGIN_SHOT_PHASE': {
       return {
         ...state,
-        logs: [...state.logs, "Taking a shot! Next card is the SHOT CARD."],
-        phase: 2 // Play card phase specifically for shot card
+        pendingShot: { shooter: action.shooter as any },
+        logs: [...state.logs, '🏒 ON A SHOT. Defender must play a shot card.']
       };
     }
 
@@ -177,7 +202,39 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
         puck: { area: 9, side: 'neutral', possession: null },
         passingBonusMap: { home: 0, away: 0 },
         lastShotCard: null,
+        lastPlay: {
+          player: scoringTeam,
+          type: 'Score',
+          originArea: state.puck.area,
+          originSide: state.puck.side
+        },
         logs: [...state.logs, `GOAL!!! ${scoringTeam.toUpperCase()} SCORES!`],
+      };
+    }
+
+    case 'REVERT_SCORE_AND_DEFLECT': {
+      const scoringTeam = action.scoringTeam;
+      const defendingZone = scoringTeam === 'home' ? 'away' : 'home';
+      
+      // Determine if the shot came from the left or right side to pick Area 0 or Area 12
+      // Using a simple heuristic based on typical layout (odd vs even or specific keys)
+      // Actually, we'll just rely on the UI to map this eventually or use Area 0 as default if we don't have X coords.
+      // But 0 and 12 are the faceoff dots. Let's just pass the area down.
+      const faceoffArea = [1, 3, 0].includes(action.originArea) ? 0 : 12;
+
+      return {
+        ...state,
+        [scoringTeam]: {
+          ...state[scoringTeam],
+          score: Math.max(0, state[scoringTeam].score - 1)
+        },
+        stoppage: true,
+        puck: {
+          area: faceoffArea,
+          side: defendingZone,
+          possession: null
+        },
+        logs: [...state.logs, `Deflection! Goal reverted. Stoppage out of play. Face-off at ${defendingZone} zone face-off dot.`],
       };
     }
 
@@ -280,7 +337,7 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
     }
 
     case 'MOVE_PUCK_TO': {
-      return {
+      const newState = {
         ...state,
         puck: {
           ...state.puck,
@@ -289,6 +346,17 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
         },
         logs: [...state.logs, `Puck moved to Area ${action.area} (${action.side})`]
       };
+
+      if (action.record) {
+        newState.lastPlay = {
+          player: state.turn,
+          type: 'Move',
+          originArea: action.record.originArea,
+          originSide: action.record.originSide,
+          distance: action.record.distance
+        };
+      }
+      return newState;
     }
 
     case 'SELECT_PERK': {
@@ -326,8 +394,13 @@ export const useGame = () => {
     dispatch({ type: 'PLAY_CARD', player, cardId }), []);
   const endTurn = useCallback(() => dispatch({ type: 'END_TURN' }), []);
 
-  const movePuckTo = useCallback((area: Area, side: 'home' | 'away' | 'neutral') => 
-    dispatch({ type: 'MOVE_PUCK_TO', area, side }), []);
+  const movePuckTo = useCallback((area: Area, side: 'home' | 'away' | 'neutral', record?: { originArea: Area, originSide: 'home' | 'away' | 'neutral', distance: number }) => 
+    dispatch({ type: 'MOVE_PUCK_TO', area, side, record }), []);
+
+  const beginShotPhase = useCallback((shooter: 'home' | 'away') => dispatch({ type: 'BEGIN_SHOT_PHASE', shooter } as any), []);
+
+  const revertScoreAndDeflect = useCallback((scoringTeam: 'home' | 'away', originArea: Area, originSide: 'home' | 'away' | 'neutral') => 
+    dispatch({ type: 'REVERT_SCORE_AND_DEFLECT', scoringTeam, originArea, originSide }), []);
 
   return {
     state,
@@ -335,6 +408,8 @@ export const useGame = () => {
     playCard,
     endTurn,
     movePuckTo,
+    revertScoreAndDeflect,
+    beginShotPhase,
     switchWithBench: (player: 'home' | 'away', handCardId: string, benchCardId: string) => 
       dispatch({ type: 'SWITCH_WITH_BENCH', player, handCardId, benchCardId }),
     startFaceoff: () => dispatch({ type: 'START_FACEOFF' }),

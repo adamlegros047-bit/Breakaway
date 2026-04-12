@@ -13,14 +13,15 @@ import { CardDetailModal } from './components/CardDetailModal';
 import { ResolutionPanel } from './components/ResolutionPanel';
 import type { ResolutionItem } from './components/ResolutionPanel';
 import { useGame } from './hooks/useGame';
-import { getAdjacentAreas } from './logic/adjacency';
+import { getAdjacentAreas, getAreasWithinHops } from './logic/adjacency';
+import { COLOR_ACTIONS } from './logic/colorActions';
 import type { Card as CardType } from './types';
 
 function App() {
   const { 
     state, startGame, playCard, endTurn, movePuckTo, switchWithBench, 
     startFaceoff, nextPeriod, cancelChallenge,
-    selectPerk, confirmPerk
+    selectPerk, confirmPerk, beginShotPhase, revertScoreAndDeflect
   } = useGame();
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [viewingCard, setViewingCard] = useState<CardType | null>(null);
@@ -29,7 +30,7 @@ function App() {
   const [showBenchFor, setShowBenchFor] = useState<'home' | 'away' | null>(null);
   const [showDeckFor, setShowDeckFor] = useState<'home' | 'away' | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{ message: string; onConfirm: () => void } | null>(null);
-  const [pendingMove, setPendingMove] = useState<string[] | null>(null);
+  const [pendingMove, setPendingMove] = useState<{ options: string[], distance: number, reason: 'Move' | 'Stretch Pass' | 'Poke-check' | 'Deflect' } | null>(null);
   const [pendingFaceoffPullback, setPendingFaceoffPullback] = useState<{ winner: 'home' | 'away'; options: string[] } | null>(null);
   const [faceoffJustWon, setFaceoffJustWon] = useState<'home' | 'away' | null>(null);
   const [resolutionQueue, setResolutionQueue] = useState<ResolutionItem[]>([]);
@@ -98,12 +99,71 @@ function App() {
 
   // Apply a single resolution item immediately
   const applyResolutionItem = (item: ResolutionItem) => {
-    if (item.type === 'action' && item.value === 'Move') {
-      const adjacent = getAdjacentAreas(state.puck.area, state.puck.side);
-      setPendingMove(adjacent);
+    if (item.type === 'action') {
+      if (item.value === 'Move') {
+        const adjacent = getAdjacentAreas(state.puck.area, state.puck.side);
+        setPendingMove({ options: adjacent, distance: 1, reason: 'Move' });
+      } else if (item.value === 'Stretch Pass') {
+        // Up to 2 areas away via BFS
+        const reachable = getAreasWithinHops(state.puck.area, state.puck.side, 2);
+        setPendingMove({ options: reachable, distance: 2, reason: 'Stretch Pass' });
+      } else if (item.value === 'Shoot' || item.value === 'On-Net') {
+        // Both Shoot and On-Net enter the shot phase
+        beginShotPhase(state.turn);
+      } else if (item.value === 'Body-Check') {
+        // Non-puck-holder takes possession — move puck to same area to update possession state
+        if (state.puck.possession !== state.turn) {
+          movePuckTo(state.puck.area, state.puck.side);
+        }
+      } else if (item.value === 'Poke-check') {
+        // Take possession; show nodes 1 step toward own net
+        const adjacent = getAdjacentAreas(state.puck.area, state.puck.side);
+        const currentY = parseFloat(AREA_MAP[`${state.puck.side}-${state.puck.area}`]?.y || '50');
+        // Home player retreats toward bottom (higher y); Away toward top (lower y)
+        const pullbackNodes = adjacent.filter(key => {
+          const areaY = parseFloat(AREA_MAP[key]?.y || '50');
+          return state.turn === 'home' ? areaY > currentY : areaY < currentY;
+        });
+        const options = pullbackNodes.length > 0 ? pullbackNodes : adjacent;
+        setPendingMove({ options, distance: 1, reason: 'Poke-check' });
+
+        // Penalty if opponent's active card is a Player Card (1-7) or Goalie
+        const opponent = state.turn === 'home' ? 'away' : 'home';
+        const opponentCard = state.activeCards.find(c =>
+          state[opponent].discard.some(d => d.id === c.id)
+        ) ?? state[opponent].discard[state[opponent].discard.length - 1];
+
+        if (opponentCard && (
+          (opponentCard.number !== undefined && opponentCard.number >= 1 && opponentCard.number <= 7)
+          || opponentCard.isGoalie
+        )) {
+          // Log the penalty — full penalty state management TBD
+          console.warn(`Poke-check penalty: ${state.turn} penalised for slashing a Player/Goalie card`);
+        }
+      } else if (item.value === 'Deflect') {
+        const opponent = state.turn === 'home' ? 'away' : 'home';
+        const lastPlay = state.lastPlay;
+        if (lastPlay && lastPlay.player === opponent) {
+          if (lastPlay.type === 'Move' && lastPlay.originArea !== undefined && lastPlay.distance) {
+            movePuckTo(lastPlay.originArea, lastPlay.originSide as any);
+            const reachable = getAreasWithinHops(lastPlay.originArea, lastPlay.originSide as any, lastPlay.distance);
+            setPendingMove({ options: reachable, distance: lastPlay.distance, reason: 'Deflect' });
+          } else if (lastPlay.type === 'Score' && lastPlay.originArea !== undefined) {
+              revertScoreAndDeflect(lastPlay.player as 'home'|'away', lastPlay.originArea, lastPlay.originSide as any);
+          }
+        }
+      } else if (item.value === 'Tip') {
+        const opponent = state.turn === 'home' ? 'away' : 'home';
+        const lastPlay = state.lastPlay;
+        if (state.pendingShot && lastPlay && lastPlay.player === opponent) {
+           if (lastPlay.type === 'Move' && lastPlay.originArea !== undefined && lastPlay.originSide) {
+             // Retroactively undo the opponent's shot card movement!
+             movePuckTo(lastPlay.originArea, lastPlay.originSide as any);
+           }
+        }
+      }
     }
-    // Shoot, abilities, specials: logged via pendingPerk/existing game flow
-    // Future: add effect handlers here per type
+    // Save, abilities, specials: handled via pendingPerk / existing challenge flow
   };
 
   const handleAreaClick = (area: any, side: any) => {
@@ -122,8 +182,12 @@ function App() {
     // If awaiting move destination from a Move card
     if (pendingMove !== null) {
       const key = `${side}-${area}`;
-      if (pendingMove.includes(key)) {
-        movePuckTo(area, side);
+      if (pendingMove.options.includes(key)) {
+        if (['Move', 'Stretch Pass', 'Deflect'].includes(pendingMove.reason)) {
+          movePuckTo(area, side, { originArea: state.puck.area, originSide: state.puck.side, distance: pendingMove.distance });
+        } else {
+          movePuckTo(area, side);
+        }
       }
       setPendingMove(null);
       return;
@@ -132,9 +196,9 @@ function App() {
     if (selectedCardId) {
       const card = state[state.turn].hand.find(c => c.id === selectedCardId);
       if (card?.actions.includes('Move')) {
-        // Enter move-selection mode: compute adjacent areas and wait for board click
+        // Obsolete legacy direct mode - kept for fallback mapping
         const adjacent = getAdjacentAreas(state.puck.area, state.puck.side);
-        setPendingMove(adjacent);
+        setPendingMove({ options: adjacent, distance: 1, reason: 'Move' });
         setSelectedCardId(null);
         playCard(state.turn, selectedCardId);
         return;
@@ -239,22 +303,30 @@ function App() {
               (state.turn === 'away' && !!state.activeChallenge.awayCard)
             ))
           }
+          pendingShot={!!state.pendingShot && state.pendingShot.shooter === state.turn}
           onPlay={(selection) => {
-            playCard(state.turn, viewingCard.id);
-            const cardName = viewingCard.name;
+            const card = viewingCard;
+            playCard(state.turn, card.id);
+            const cardName = card.name;
             setViewingCard(null);
 
-            const items: ResolutionItem[] = [
+            // Player-selected actions & specials
+            const selectedItems: ResolutionItem[] = [
               ...selection.actions.map(v => ({ type: 'action' as const, value: v })),
-              ...selection.abilities.map(v => ({ type: 'ability' as const, value: v })),
               ...selection.specials.map(v => ({ type: 'special' as const, value: v })),
             ];
 
+            // Auto-granted actions from colour abilities (always queued, no selection needed)
+            const colorItems: ResolutionItem[] = card.abilities.flatMap(ability => {
+              const actions = COLOR_ACTIONS[ability] ?? [];
+              return actions.map(v => ({ type: 'action' as const, value: v }));
+            });
+
+            const items: ResolutionItem[] = [...selectedItems, ...colorItems];
+
             if (items.length === 1) {
-              // Single selection: apply immediately, no resolution screen
               applyResolutionItem(items[0]);
             } else if (items.length > 1) {
-              // Multiple selections: queue for sequential resolution
               setResolutionQueue(items);
               setResolvingCardName(cardName);
             }
@@ -324,9 +396,15 @@ function App() {
             {/* Zone Tracker — cap of the stack */}
             <div className={`zone-tracker ${currentZone}`}>
               <span className="zone-label">
-                {currentZone === 'offensive' ? 'OFFENSIVE ZONE'
+                {state.pendingShot ? (
+                  <span style={{ color: '#ffea00', animation: 'pulse 1.5s infinite' }}>
+                    🚨 ON A SHOT 🚨
+                  </span>
+                ) : (
+                  currentZone === 'offensive' ? 'OFFENSIVE ZONE'
                   : currentZone === 'defensive' ? 'DEFENSIVE ZONE'
-                  : 'NEUTRAL ZONE'}
+                  : 'NEUTRAL ZONE'
+                )}
               </span>
               <div className="zone-bar-bg">
                 <div className="zone-bar-fill" style={{ width: `${puckY}%` }} />
@@ -338,7 +416,7 @@ function App() {
               state={state}
               onAreaClick={handleAreaClick}
               onNavigateZone={handleNavigateZone}
-              adjacentMoveAreas={pendingFaceoffPullback?.options ?? pendingMove ?? []}
+              adjacentMoveAreas={pendingFaceoffPullback?.options ?? pendingMove?.options ?? []}
             />
 
             {/* Move destination prompt */}
@@ -359,7 +437,7 @@ function App() {
                 boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
                 pointerEvents: 'none',
               }}>
-                🏒 SELECT DESTINATION — click a glowing node
+                🏒 {pendingMove.reason === 'Stretch Pass' ? 'SELECT DESTINATION (2 areas max)' : pendingMove.reason === 'Deflect' ? 'DEFLECTION! SELECT NEW DESTINATION' : pendingMove.reason === 'Poke-check' ? 'POKE-CHECK! PULL PUCK BACK' : 'SELECT DESTINATION — click a glowing node'}
                 <button
                   onClick={() => setPendingMove(null)}
                   style={{ marginLeft: 12, background: 'none', border: '1px solid #111', borderRadius: 8, padding: '2px 8px', cursor: 'pointer', fontWeight: 800, pointerEvents: 'all' }}
