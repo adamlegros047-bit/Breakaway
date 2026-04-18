@@ -3,7 +3,7 @@ import type { GameState, Card, Area, ActionType, AbilityColor, PendingPerk } fro
 import { createInitialGameState, switchTurn, drawCard, getZone, resolveChallenge } from '../logic/gameEngine';
 
 type GameAction = 
-  | { type: 'START_GAME' }
+  | { type: 'START_GAME'; homeBench?: Card[]; awayBench?: Card[] }
   | { type: 'PLAY_CARD', player: 'home' | 'away', cardId: string }
   | { type: 'MOVE_PUCK', area: number }
   | { type: 'BEGIN_SHOT_PHASE' }
@@ -19,12 +19,14 @@ type GameAction =
   | { type: 'SPEND_MOMENTUM', player: 'home' | 'away' }
   | { type: 'SELECT_PERK', action?: ActionType, ability?: AbilityColor }
   | { type: 'CONFIRM_PERK' }
-  | { type: 'SWITCH_WITH_BENCH', player: 'home' | 'away', handCardId: string, benchCardId: string };
+  | { type: 'SWITCH_WITH_BENCH', player: 'home' | 'away', handCardId: string, benchCardId: string }
+  | { type: 'TAKE_POSSESSION', player: 'home' | 'away' }
+  | { type: 'DRAW_CARD', player: 'home' | 'away' };
 
 const gameReducer = (state: GameState, action: GameAction): GameState => {
   switch (action.type) {
     case 'START_GAME':
-      return createInitialGameState();
+      return createInitialGameState(action.homeBench, action.awayBench);
       
     case 'START_FACEOFF': {
       return {
@@ -248,6 +250,33 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
       };
     }
 
+    case 'TAKE_POSSESSION': {
+      return {
+        ...state,
+        puck: {
+          ...state.puck,
+          possession: action.player,
+        },
+        logs: [...state.logs, `${action.player.toUpperCase()} took possession via Body-Check!`],
+      };
+    }
+
+    case 'DRAW_CARD': {
+      const player = state[action.player];
+      if (player.deck.length === 0) {
+        return {
+          ...state,
+          logs: [...state.logs, `${player.name} tried to Draw but their deck is empty!`],
+        };
+      }
+      const updated = drawCard(player);
+      return {
+        ...state,
+        [action.player]: updated,
+        logs: [...state.logs, `${player.name} drew a card (hand: ${updated.hand.length}).`],
+      };
+    }
+
     case 'END_TURN': {
       const currentPlayer = state[state.turn];
       const updatedPlayer = drawCard(currentPlayer);
@@ -389,7 +418,11 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
 export const useGame = () => {
   const [state, dispatch] = useReducer(gameReducer, createInitialGameState());
 
-  const startGame = useCallback(() => dispatch({ type: 'START_GAME' }), []);
+  const startGame = useCallback(
+    (homeBench?: Card[], awayBench?: Card[]) =>
+      dispatch({ type: 'START_GAME', homeBench, awayBench }),
+    []
+  );
   const playCard = useCallback((player: 'home' | 'away', cardId: string) => 
     dispatch({ type: 'PLAY_CARD', player, cardId }), []);
   const endTurn = useCallback(() => dispatch({ type: 'END_TURN' }), []);
@@ -419,5 +452,7 @@ export const useGame = () => {
     selectPerk: (action?: ActionType, ability?: AbilityColor) => 
       dispatch({ type: 'SELECT_PERK', action, ability }),
     confirmPerk: () => dispatch({ type: 'CONFIRM_PERK' }),
+    takePossession: (player: 'home' | 'away') => dispatch({ type: 'TAKE_POSSESSION', player }),
+    drawCardForPlayer: (player: 'home' | 'away') => dispatch({ type: 'DRAW_CARD', player }),
   };
 };

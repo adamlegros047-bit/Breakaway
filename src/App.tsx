@@ -7,25 +7,29 @@ import { PlayerHand } from './components/PlayerHand';
 import { useAI } from './hooks/useAI';
 import { Card } from './components/Card';
 import { StartScreen } from './components/StartScreen';
+import { BenchBuilderScreen } from './components/BenchBuilderScreen';
 import { FaceoffModal } from './components/FaceoffModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { CardDetailModal } from './components/CardDetailModal';
-import { ResolutionPanel } from './components/ResolutionPanel';
-import type { ResolutionItem } from './components/ResolutionPanel';
 import { useGame } from './hooks/useGame';
 import { getAdjacentAreas, getAreasWithinHops } from './logic/adjacency';
 import { COLOR_ACTIONS } from './logic/colorActions';
 import type { Card as CardType } from './types';
+import { getOfficialDeck } from './cards';
+
+// Nodes that can never be a move destination during live play
+const BLOCKED_MOVE_NODES = new Set(['neutral-9']);
+const filterNodes = (nodes: string[]) => nodes.filter(k => !BLOCKED_MOVE_NODES.has(k));
 
 function App() {
   const { 
     state, startGame, playCard, endTurn, movePuckTo, switchWithBench, 
     startFaceoff, nextPeriod, cancelChallenge,
-    selectPerk, confirmPerk, beginShotPhase, revertScoreAndDeflect
+    selectPerk, confirmPerk, beginShotPhase, revertScoreAndDeflect, takePossession, drawCardForPlayer
   } = useGame();
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [viewingCard, setViewingCard] = useState<CardType | null>(null);
-  const [hasStarted, setHasStarted] = useState(false);
+  const [appPhase, setAppPhase] = useState<'start' | 'bench-home' | 'bench-away' | 'playing'>('start');
   const [isAIEnabled, setIsAIEnabled] = useState(true);
   const [showBenchFor, setShowBenchFor] = useState<'home' | 'away' | null>(null);
   const [showDeckFor, setShowDeckFor] = useState<'home' | 'away' | null>(null);
@@ -33,8 +37,18 @@ function App() {
   const [pendingMove, setPendingMove] = useState<{ options: string[], distance: number, reason: 'Move' | 'Stretch Pass' | 'Poke-check' | 'Deflect' } | null>(null);
   const [pendingFaceoffPullback, setPendingFaceoffPullback] = useState<{ winner: 'home' | 'away'; options: string[] } | null>(null);
   const [faceoffJustWon, setFaceoffJustWon] = useState<'home' | 'away' | null>(null);
-  const [resolutionQueue, setResolutionQueue] = useState<ResolutionItem[]>([]);
-  const [resolvingCardName, setResolvingCardName] = useState<string>('');
+  // Tracks whether current player has played a card this turn (gates NEXT PHASE)
+  const [hasPlayedThisTurn, setHasPlayedThisTurn] = useState(false);
+  // Stored bench selections from the builder phase
+  const [homeBenchSelection, setHomeBenchSelection] = useState<CardType[]>([]);
+  // Tracks which bench card is selected for a swap
+  const [selectedBenchCardId, setSelectedBenchCardId] = useState<string | null>(null);
+
+  // Pre-generated decks shown in the bench builder (stable across renders)
+  const [homeDeckForBuilder] = useState(() => getOfficialDeck('white'));
+  const [awayDeckForBuilder] = useState(() => getOfficialDeck('black'));
+
+  const hasStarted = appPhase === 'playing';
 
   // Refs to track previous state for transition detection
   const prevChallengeRef = useRef(state.activeChallenge);
@@ -49,24 +63,39 @@ function App() {
     }
   }, [state.activeChallenge]);
 
-  // After perk is confirmed, offer the pullback move
+  // After perk is confirmed, offer the pullback move (or auto-move for centre ice)
   useEffect(() => {
     const prev = prevPerkRef.current;
     prevPerkRef.current = state.pendingPerk;
     if (prev !== null && state.pendingPerk === null && faceoffJustWon) {
-      const adjacent = getAdjacentAreas(state.puck.area, state.puck.side);
-      const currentY = parseFloat(AREA_MAP[`${state.puck.side}-${state.puck.area}`]?.y || '50');
-      // Home winner pulls toward own (bottom) net = higher y; Away toward top net = lower y
-      const pullbackOptions = adjacent.filter(key => {
-        const areaY = parseFloat(AREA_MAP[key]?.y || '50');
-        return faceoffJustWon === 'home' ? areaY > currentY : areaY < currentY;
-      });
-      if (pullbackOptions.length > 0) {
-        setPendingFaceoffPullback({ winner: faceoffJustWon, options: pullbackOptions });
+      const isCenterFaceoff = state.puck.side === 'neutral' && state.puck.area === 9;
+
+      if (isCenterFaceoff) {
+        // Auto-move to the nearest neutral node on the winner's side:
+        // Away team faces toward the top (neutral-10), Home toward the bottom (neutral-11)
+        const targetArea = faceoffJustWon === 'away' ? 10 : 11;
+        movePuckTo(targetArea as any, 'neutral');
+      } else {
+        const adjacent = getAdjacentAreas(state.puck.area, state.puck.side);
+        const currentY = parseFloat(AREA_MAP[`${state.puck.side}-${state.puck.area}`]?.y || '50');
+        const pullbackOptions = filterNodes(adjacent.filter(key => {
+          const areaY = parseFloat(AREA_MAP[key]?.y || '50');
+          return faceoffJustWon === 'home' ? areaY > currentY : areaY < currentY;
+        }));
+        if (pullbackOptions.length > 0) {
+          setPendingFaceoffPullback({ winner: faceoffJustWon, options: pullbackOptions });
+        }
       }
       setFaceoffJustWon(null);
     }
   }, [state.pendingPerk, faceoffJustWon]);
+
+  // Auto-confirm pendingPerk — no modal, effects already applied via applyResolutionItem
+  useEffect(() => {
+    if (state.pendingPerk) {
+      confirmPerk();
+    }
+  }, [state.pendingPerk]);
 
   useAI(
     state,
@@ -81,19 +110,29 @@ function App() {
   const puckY = parseFloat(AREA_MAP[puckKey]?.y || '50');
   const currentZone = puckY < 33.5 ? 'offensive' : puckY > 66.5 ? 'defensive' : 'neutral';
 
-  const handleStart = () => { startGame(); setHasStarted(true); };
+  const handleStart = () => { setAppPhase('bench-home'); };
+
+  const handleHomeBenchConfirm = (bench: CardType[]) => {
+    setHomeBenchSelection(bench);
+    setAppPhase('bench-away');
+  };
+
+  const handleAwayBenchConfirm = (awayBench: CardType[]) => {
+    startGame(homeBenchSelection, awayBench);
+    setAppPhase('playing');
+  };
 
   const handleRestart = () => {
     setConfirmConfig({
       message: "Restart the game? All progress will be lost.",
-      onConfirm: () => { startGame(); setConfirmConfig(null); }
+      onConfirm: () => { setAppPhase('bench-home'); setConfirmConfig(null); }
     });
   };
 
   const handleBackToStart = () => {
     setConfirmConfig({
       message: "Return to main menu? Current game progress will be reset.",
-      onConfirm: () => { setHasStarted(false); setConfirmConfig(null); }
+      onConfirm: () => { setAppPhase('start'); setConfirmConfig(null); }
     });
   };
 
@@ -101,20 +140,21 @@ function App() {
   const applyResolutionItem = (item: ResolutionItem) => {
     if (item.type === 'action') {
       if (item.value === 'Move') {
-        const adjacent = getAdjacentAreas(state.puck.area, state.puck.side);
+        const adjacent = filterNodes(getAdjacentAreas(state.puck.area, state.puck.side));
         setPendingMove({ options: adjacent, distance: 1, reason: 'Move' });
       } else if (item.value === 'Stretch Pass') {
         // Up to 2 areas away via BFS
-        const reachable = getAreasWithinHops(state.puck.area, state.puck.side, 2);
+        const reachable = filterNodes(getAreasWithinHops(state.puck.area, state.puck.side, 2));
         setPendingMove({ options: reachable, distance: 2, reason: 'Stretch Pass' });
       } else if (item.value === 'Shoot' || item.value === 'On-Net') {
         // Both Shoot and On-Net enter the shot phase
         beginShotPhase(state.turn);
       } else if (item.value === 'Body-Check') {
-        // Non-puck-holder takes possession — move puck to same area to update possession state
-        if (state.puck.possession !== state.turn) {
-          movePuckTo(state.puck.area, state.puck.side);
-        }
+        // The player who played Body-Check takes possession of the puck
+        takePossession(state.turn);
+      } else if (item.value === 'Draw') {
+        // Draw the top card from the current player's deck into their hand
+        drawCardForPlayer(state.turn);
       } else if (item.value === 'Poke-check') {
         // Take possession; show nodes 1 step toward own net
         const adjacent = getAdjacentAreas(state.puck.area, state.puck.side);
@@ -124,7 +164,7 @@ function App() {
           const areaY = parseFloat(AREA_MAP[key]?.y || '50');
           return state.turn === 'home' ? areaY > currentY : areaY < currentY;
         });
-        const options = pullbackNodes.length > 0 ? pullbackNodes : adjacent;
+        const options = filterNodes(pullbackNodes.length > 0 ? pullbackNodes : adjacent);
         setPendingMove({ options, distance: 1, reason: 'Poke-check' });
 
         // Penalty if opponent's active card is a Player Card (1-7) or Goalie
@@ -146,7 +186,7 @@ function App() {
         if (lastPlay && lastPlay.player === opponent) {
           if (lastPlay.type === 'Move' && lastPlay.originArea !== undefined && lastPlay.distance) {
             movePuckTo(lastPlay.originArea, lastPlay.originSide as any);
-            const reachable = getAreasWithinHops(lastPlay.originArea, lastPlay.originSide as any, lastPlay.distance);
+            const reachable = filterNodes(getAreasWithinHops(lastPlay.originArea, lastPlay.originSide as any, lastPlay.distance));
             setPendingMove({ options: reachable, distance: lastPlay.distance, reason: 'Deflect' });
           } else if (lastPlay.type === 'Score' && lastPlay.originArea !== undefined) {
               revertScoreAndDeflect(lastPlay.player as 'home'|'away', lastPlay.originArea, lastPlay.originSide as any);
@@ -215,6 +255,11 @@ function App() {
     setSelectedCardId(null);
   };
 
+  const closeBenchOverlay = () => {
+    setShowBenchFor(null);
+    setSelectedBenchCardId(null);
+  };
+
   // Navigate zone: up = toward offensive (top), down = toward defensive (bottom)
   const handleNavigateZone = (direction: 'up' | 'down') => {
     if (direction === 'up') {
@@ -230,107 +275,65 @@ function App() {
 
   return (
     <div className="app-main">
-      {!hasStarted && <StartScreen onStart={handleStart} />}
+      {appPhase === 'start' && <StartScreen onStart={handleStart} />}
 
+      {appPhase === 'bench-home' && (
+        <BenchBuilderScreen
+          playerLabel="HOME PLAYER"
+          playerColor="white"
+          availableCards={homeDeckForBuilder}
+          onConfirm={handleHomeBenchConfirm}
+        />
+      )}
+
+      {appPhase === 'bench-away' && (
+        <BenchBuilderScreen
+          playerLabel="AWAY PLAYER"
+          playerColor="black"
+          availableCards={awayDeckForBuilder}
+          onConfirm={handleAwayBenchConfirm}
+        />
+      )}
       {state.activeChallenge && (
         <FaceoffModal state={state} onPlayCard={playCard} onClose={cancelChallenge} />
       )}
 
-      {state.pendingPerk && (
-        <div className="reward-overlay">
-          <div className="reward-modal">
-            <div className="reward-header">
-              <h3>CARD RESOLUTION</h3>
-              <p>{state.pendingPerk.winner.toUpperCase()} Team, resolve your card perks.</p>
-            </div>
-            <div className="reward-body">
-              <div className="reward-card-preview">
-                <Card card={state.pendingPerk.card} />
-              </div>
-              <div className="reward-controls">
-                <div className="control-group">
-                  <label>PICK 1 ACTION</label>
-                  <div className="reward-options">
-                    {state.pendingPerk.card.actions.map(act => (
-                      <button 
-                        key={act}
-                        className={`opt-btn ${state.pendingPerk?.selectedAction === act ? 'active' : ''}`}
-                        onClick={() => selectPerk(act, undefined)}
-                      >{act}</button>
-                    ))}
-                    {state.pendingPerk.card.actions.length === 0 && <span className="no-opts">No actions available</span>}
-                  </div>
-                </div>
-                <div className="control-group">
-                  <label>PICK 1 ABILITY</label>
-                  <div className="reward-options">
-                    {state.pendingPerk.card.abilities.map(ab => (
-                      <button 
-                        key={ab}
-                        className={`opt-btn ${state.pendingPerk?.selectedAbility === ab ? 'active' : ''}`}
-                        onClick={() => selectPerk(undefined, ab)}
-                        style={{'--ability-color': ab.toLowerCase()} as any}
-                      >{ab}</button>
-                    ))}
-                    {state.pendingPerk.card.abilities.length === 0 && <span className="no-opts">No abilities available</span>}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="reward-footer">
-              <button 
-                className="confirm-reward-btn" 
-                disabled={
-                  (state.pendingPerk.card.actions.length > 0 && !state.pendingPerk.selectedAction) ||
-                  (state.pendingPerk.card.abilities.length > 0 && !state.pendingPerk.selectedAbility)
-                }
-                onClick={confirmPerk}
-              >CONFIRM RESOLUTION</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {viewingCard && (
         <CardDetailModal 
           card={viewingCard}
           onClose={() => setViewingCard(null)}
           isPlayDisabled={
-            !hasStarted || 
-            !!state.pendingPerk || 
+            !hasStarted ||
+            // Stoppage / lineup phase: must start a face-off first
+            (state.stoppage && !state.activeChallenge) ||
+            // Card already played this turn — awaiting perk resolution
+            !!state.pendingPerk ||
+            // During a face-off, current player has already submitted their card
             (!!state.activeChallenge && (
               (state.turn === 'home' && !!state.activeChallenge.homeCard) ||
               (state.turn === 'away' && !!state.activeChallenge.awayCard)
             ))
           }
           pendingShot={!!state.pendingShot && state.pendingShot.shooter === state.turn}
+          hasPossession={state.puck.possession === state.turn}
           onPlay={(selection) => {
             const card = viewingCard;
             playCard(state.turn, card.id);
-            const cardName = card.name;
             setViewingCard(null);
 
-            // Player-selected actions & specials
-            const selectedItems: ResolutionItem[] = [
+            // Collect player-selected actions/specials + auto-granted colour ability actions
+            const items = [
               ...selection.actions.map(v => ({ type: 'action' as const, value: v })),
               ...selection.specials.map(v => ({ type: 'special' as const, value: v })),
+              ...card.abilities.flatMap(ability =>
+                (COLOR_ACTIONS[ability] ?? []).map(v => ({ type: 'action' as const, value: v }))
+              ),
             ];
 
-            // Auto-granted actions from colour abilities (always queued, no selection needed)
-            const colorItems: ResolutionItem[] = card.abilities.flatMap(ability => {
-              const actions = COLOR_ACTIONS[ability] ?? [];
-              return actions.map(v => ({ type: 'action' as const, value: v }));
-            });
-
-            const items: ResolutionItem[] = [...selectedItems, ...colorItems];
-
-            if (items.length === 1) {
-              applyResolutionItem(items[0]);
-            } else if (items.length > 1) {
-              setResolutionQueue(items);
-              setResolvingCardName(cardName);
-            }
-            // 0 items: card plays with no effects
+            // Apply all effects immediately — no resolution window
+            items.forEach(item => applyResolutionItem(item));
+            setHasPlayedThisTurn(true);
           }}
         />
       )}
@@ -340,26 +343,6 @@ function App() {
           message={confirmConfig.message}
           onConfirm={confirmConfig.onConfirm}
           onCancel={() => setConfirmConfig(null)}
-        />
-      )}
-
-      {resolutionQueue.length > 0 && (
-        <ResolutionPanel
-          cardName={resolvingCardName}
-          queue={resolutionQueue}
-          onActivate={(item) => {
-            // Find and remove the FIRST matching item in the queue
-            setResolutionQueue(prev => {
-              const idx = prev.findIndex(q => q.type === item.type && q.value === item.value);
-              if (idx === -1) return prev;
-              return prev.filter((_, i) => i !== idx);
-            });
-            applyResolutionItem(item);
-          }}
-          onDone={() => {
-            setResolutionQueue([]);
-            setResolvingCardName('');
-          }}
         />
       )}
 
@@ -499,10 +482,16 @@ function App() {
 
                 {/* Action Buttons */}
                 <div className="action-row">
-                  {state.phase === 1 && (
+                  {state.stoppage && !state.activeChallenge && (
                     <button className="act-btn faceoff-btn" onClick={startFaceoff}>START FACEOFF</button>
                   )}
-                  <button className="act-btn phase-btn" onClick={endTurn}>NEXT PHASE</button>
+                  <button
+                    className="act-btn phase-btn"
+                    disabled={!hasPlayedThisTurn}
+                    onClick={() => { endTurn(); setHasPlayedThisTurn(false); }}
+                    style={!hasPlayedThisTurn ? { opacity: 0.35, cursor: 'not-allowed' } : {}}
+                    title={!hasPlayedThisTurn ? 'Play a card before ending your turn' : undefined}
+                  >NEXT PHASE</button>
                   {!state.activeChallenge && (
                     <button className="act-btn period-btn" onClick={nextPeriod}>NEXT PERIOD</button>
                   )}
@@ -523,31 +512,95 @@ function App() {
         </div>
       )}
 
-      {/* Bench Overlay Modal */}
-      {showBenchFor && (
-        <div className="bench-expanded-overlay" onClick={() => setShowBenchFor(null)}>
-          <div className="bench-cards-container" onClick={e => e.stopPropagation()}>
-            <h3>{showBenchFor.toUpperCase()} BENCH</h3>
-            <div className="bench-grid">
-              {activeBench.map(card => (
-                <div key={card.id} className="bench-card-item">
-                  <Card 
-                    card={card} 
-                    onClick={() => {
-                      if (selectedCardId) {
-                        handleBenchSwap(showBenchFor, selectedCardId, card.id);
-                        setShowBenchFor(null);
-                      }
-                    }} 
-                  />
-                  {selectedCardId && <div className="swap-hint">CLICK TO SWAP</div>}
-                </div>
-              ))}
+      {/* Bench Overlay Modal — two-step swap */}
+      {showBenchFor && (() => {
+        const benchPlayer = state[showBenchFor];
+        const bench = benchPlayer.bench;
+        const hand  = benchPlayer.hand;
+
+        return (
+          <div className="bench-expanded-overlay" onClick={closeBenchOverlay}>
+            <div className="bench-cards-container bench-swap-container" onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div className="bench-swap-header">
+                <h3>{showBenchFor.toUpperCase()} BENCH</h3>
+                {!selectedBenchCardId && !selectedCardId && (
+                  <p className="bench-swap-instruction">SELECT A BENCH CARD TO SWAP OUT</p>
+                )}
+                {(selectedBenchCardId || selectedCardId) && (
+                  <p className="bench-swap-instruction active">NOW SELECT A HAND CARD TO SWAP IN ↓</p>
+                )}
+              </div>
+
+              {/* STEP 1 — Bench cards */}
+              <div className="bench-section-label">BENCH</div>
+              <div className="bench-grid">
+                {bench.map(card => {
+                  const isSelected = selectedBenchCardId === card.id;
+                  return (
+                    <div
+                      key={card.id}
+                      className={`bench-card-item ${
+                        isSelected ? 'bench-card-selected' : ''
+                      } ${
+                        selectedCardId ? 'bench-card-swappable' : ''
+                      }`}
+                      onClick={() => {
+                        if (selectedCardId) {
+                          // Hand-first flow: hand card already chosen → swap immediately
+                          handleBenchSwap(showBenchFor, selectedCardId, card.id);
+                          closeBenchOverlay();
+                          setSelectedCardId(null);
+                        } else if (isSelected) {
+                          // Deselect
+                          setSelectedBenchCardId(null);
+                        } else {
+                          // Bench-first flow: select this bench card
+                          setSelectedBenchCardId(card.id);
+                        }
+                      }}
+                    >
+                      <Card card={card} />
+                      {isSelected && <div className="swap-badge selected-badge">✓ SELECTED</div>}
+                      {selectedCardId && !isSelected && <div className="swap-badge swappable-badge">SWAP OUT</div>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* STEP 2 — Hand cards (shown when bench card selected) */}
+              {selectedBenchCardId && (
+                <>
+                  <div className="bench-section-label" style={{ marginTop: 20 }}>
+                    YOUR HAND — pick a card to swap in
+                  </div>
+                  <div className="bench-grid">
+                    {hand.map(card => (
+                      <div
+                        key={card.id}
+                        className="bench-card-item bench-card-swappable"
+                        onClick={() => {
+                          handleBenchSwap(showBenchFor, card.id, selectedBenchCardId);
+                          closeBenchOverlay();
+                        }}
+                      >
+                        <Card card={card} />
+                        <div className="swap-badge swappable-badge">SWAP IN</div>
+                      </div>
+                    ))}
+                    {hand.length === 0 && (
+                      <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, fontStyle: 'italic' }}>Hand is empty</p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              <button className="close-bench-btn" onClick={closeBenchOverlay}>CLOSE</button>
             </div>
-            <button className="close-bench-btn" onClick={() => setShowBenchFor(null)}>CLOSE</button>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Deck Overlay Modal */}
       {showDeckFor && (
@@ -624,16 +677,93 @@ function App() {
           gap: 16px; 
           flex-wrap: wrap; 
           justify-content: center;
-          overflow-y: auto;
-          flex: 1;
-          padding-bottom: 16px;
+          padding-bottom: 8px;
           scrollbar-width: thin;
         }
+
+        /* Bench swap modal overrides */
+        .bench-swap-container {
+          overflow-y: auto;
+        }
+        .bench-swap-header {
+          text-align: center;
+          margin-bottom: 12px;
+        }
+        .bench-swap-instruction {
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: 2px;
+          color: rgba(255,255,255,0.35);
+          margin-top: 4px;
+        }
+        .bench-swap-instruction.active {
+          color: #00d1b2;
+        }
+        .bench-section-label {
+          font-size: 9px;
+          font-weight: 900;
+          letter-spacing: 3px;
+          color: rgba(255,255,255,0.3);
+          margin-bottom: 12px;
+        }
+
+        /* Individual card wrappers in the bench overlay */
+        .bench-card-item {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          cursor: pointer;
+          border-radius: 10px;
+          transition: transform 0.18s, box-shadow 0.18s;
+        }
+        .bench-card-item:hover {
+          transform: translateY(-4px);
+        }
+        .bench-card-selected {
+          outline: 2px solid #00d1b2;
+          outline-offset: 3px;
+          border-radius: 10px;
+          box-shadow: 0 0 20px rgba(0,209,178,0.4);
+        }
+        .bench-card-swappable {
+          cursor: pointer;
+        }
+        .bench-card-swappable:hover {
+          box-shadow: 0 0 18px rgba(255,204,0,0.35);
+          outline: 2px solid rgba(255,204,0,0.6);
+          outline-offset: 3px;
+        }
+
+        /* Badge overlaid at the bottom of a card */
+        .swap-badge {
+          position: absolute;
+          bottom: 28px;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 8px;
+          font-weight: 900;
+          letter-spacing: 1px;
+          padding: 2px 8px;
+          border-radius: 4px;
+          white-space: nowrap;
+          pointer-events: none;
+        }
+        .selected-badge {
+          background: #00d1b2;
+          color: #000;
+        }
+        .swappable-badge {
+          background: rgba(255,204,0,0.9);
+          color: #000;
+        }
+
         .swap-hint { font-size: 9px; color: #ffcc00; text-align: center; margin-top: 8px; font-weight: 800; }
         .close-bench-btn {
-          margin-top: 16px; background: #ff3b30; border: none;
+          margin-top: 20px; background: #ff3b30; border: none;
           color: white; padding: 12px 22px; border-radius: 6px; cursor: pointer; font-weight: 800;
           width: fit-content; align-self: center; transition: background 0.2s;
+          flex-shrink: 0;
         }
         .close-bench-btn:hover { background: #ff5247; }
 

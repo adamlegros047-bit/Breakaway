@@ -13,10 +13,20 @@ interface CardDetailModalProps {
   onClose: () => void;
   isPlayDisabled?: boolean;
   pendingShot?: boolean;
+  hasPossession?: boolean;  // true if the current player holds the puck
 }
 
-export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, onPlay, onClose, isPlayDisabled, pendingShot }) => {
-  const [selectedActions, setSelectedActions] = useState<Set<ActionType>>(new Set(card.actions.filter(a => a !== 'Score' || pendingShot)));
+export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, onPlay, onClose, isPlayDisabled, pendingShot, hasPossession = true }) => {
+  // Possession-gated actions: only available when the player holds the puck
+  const POSSESSION_ACTIONS = new Set<ActionType>(['Move', 'Stretch Pass']);
+
+  const [selectedActions, setSelectedActions] = useState<Set<ActionType>>(new Set(
+    card.actions.filter(a => {
+      if (a === 'Score' && !pendingShot) return false;
+      if (POSSESSION_ACTIONS.has(a) && !hasPossession) return false;
+      return true;
+    })
+  ));
   const [selectedSpecials, setSelectedSpecials] = useState<Set<string>>(new Set(card.specials));
 
   const toggle = <T extends string>(set: Set<T>, item: T, setter: (s: Set<T>) => void) => {
@@ -63,7 +73,14 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, onPlay, 
                   <h4 className="section-title">ACTIONS</h4>
                   <div className="tag-cloud">
                     {card.actions.map(act => {
-                      const isDisabled = act === 'Score' && !pendingShot;
+                      const isScoreLocked = act === 'Score' && !pendingShot;
+                      const isMoveLocked  = POSSESSION_ACTIONS.has(act) && !hasPossession;
+                      const isDisabled    = isScoreLocked || isMoveLocked;
+                      const disabledTitle = isScoreLocked
+                        ? 'Score can only be played during an active Shot phase.'
+                        : isMoveLocked
+                        ? 'You must have puck possession to use this action.'
+                        : undefined;
                       return (
                         <button
                           key={act}
@@ -74,7 +91,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, onPlay, 
                             }
                           }}
                           disabled={isDisabled}
-                          title={isDisabled ? "Score can only be played during an active Shot phase." : undefined}
+                          title={disabledTitle}
                         >{act}</button>
                       );
                     })}

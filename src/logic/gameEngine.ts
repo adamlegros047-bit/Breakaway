@@ -5,25 +5,40 @@ import { shuffle, FULL_DECK, getOfficialDeck } from '../cards';
 const INITIAL_HAND_SIZE = 5;
 const MAX_HAND_SIZE = 8;
 
-export const createInitialPlayer = (id: string, name: string, isHome: boolean, customDeck?: Card[]): PlayerState => {
+export const createInitialPlayer = (
+  id: string,
+  name: string,
+  isHome: boolean,
+  customDeck?: Card[],
+  prebuiltBench?: Card[]
+): PlayerState => {
   const deckSource = customDeck || FULL_DECK;
   const fullDeck = shuffle(deckSource);
-  
-  // Required Bench Cards (by name for flexibility with custom decks)
-  const benchNames = ['Power Play', 'Goalie', 'Coaching', 'Line Change', 'Timeout'];
-  const bench: Card[] = [];
-  const deckAfterBench: Card[] = [];
 
-  fullDeck.forEach(card => {
-    if (benchNames.includes(card.name) && bench.length < 5 && !bench.find(b => b.name === card.name)) {
-      bench.push({ ...card, id: `${card.id}-${id}` }); // Unique ID for player instance
-    } else {
-      deckAfterBench.push(card);
-    }
-  });
+  let bench: Card[];
+  let deckAfterBench: Card[];
+
+  if (prebuiltBench && prebuiltBench.length > 0) {
+    // Player-chosen bench: remove exactly those card IDs from the deck
+    const benchIdSet = new Set(prebuiltBench.map(c => c.id));
+    bench = prebuiltBench;
+    deckAfterBench = fullDeck.filter(c => !benchIdSet.has(c.id));
+  } else {
+    // Fallback auto-bench (used when no bench was pre-selected)
+    const benchNames = ['Power Play', 'Goalie', 'Coaching', 'Line Change', 'Timeout'];
+    bench = [];
+    deckAfterBench = [];
+    fullDeck.forEach(card => {
+      if (benchNames.includes(card.name) && bench.length < 5 && !bench.find(b => b.name === card.name)) {
+        bench.push({ ...card, id: `${card.id}-${id}` });
+      } else {
+        deckAfterBench.push(card);
+      }
+    });
+  }
 
   const hand = deckAfterBench.splice(0, INITIAL_HAND_SIZE);
-  
+
   return {
     id,
     name,
@@ -41,9 +56,12 @@ export const createInitialPlayer = (id: string, name: string, isHome: boolean, c
   };
 };
 
-export const createInitialGameState = (): GameState => {
-  const home = createInitialPlayer('home-player', 'Home Player', true, getOfficialDeck('white'));
-  const away = createInitialPlayer('away-player', 'Away Player', false, getOfficialDeck('black'));
+export const createInitialGameState = (
+  homeBench?: Card[],
+  awayBench?: Card[]
+): GameState => {
+  const home = createInitialPlayer('home-player', 'Home Player', true, getOfficialDeck('white'), homeBench);
+  const away = createInitialPlayer('away-player', 'Away Player', false, getOfficialDeck('black'), awayBench);
   
   return {
     home,
