@@ -86,6 +86,7 @@ export const createInitialGameState = (
     lastPlay: null,
     isFinalMinute: false,
     stoppage: true, // Start with a stoppage for the opening face-off
+    pendingGrindChallenge: null,
     logs: ['Game started. Ready for opening face-off.'],
   };
 };

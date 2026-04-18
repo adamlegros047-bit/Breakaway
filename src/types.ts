@@ -18,7 +18,10 @@ export type ActionType =
   | 'Icing' 
   | 'Block' 
   | 'Clone' 
-  | 'Draw';
+  | 'Draw'
+  | 'Doubles'
+  | 'Stoppage'
+  | 'Grind Challenge';
 
 export type AbilityColor = 
   | 'Black' 
@@ -95,6 +98,7 @@ export interface GameState {
   lastPlayerCardNumber: number | null; // Tracks the face value of the last played Player Card (1-7)
   isFinalMinute: boolean;
   stoppage: boolean;
+  pendingGrindChallenge: PendingGrindChallenge | null;
   lastPlay: PlayEvent | null;
   logs: string[];
 }
@@ -121,4 +125,9 @@ export interface Challenge {
   homeCard: Card | null;
   awayCard: Card | null;
   status: 'pending' | 'resolved';
+}
+
+export interface PendingGrindChallenge {
+  challenger: 'home' | 'away';
+  challengerCard: Card;
 }

@@ -1,5 +1,5 @@
 import { useReducer, useCallback } from 'react';
-import type { GameState, Card, Area, ActionType, AbilityColor, PendingPerk } from '../types';
+import type { GameState, Card, Area, ActionType, AbilityColor, PendingPerk, PendingGrindChallenge } from '../types';
 import { createInitialGameState, switchTurn, drawCard, getZone, resolveChallenge } from '../logic/gameEngine';
 
 type GameAction = 
@@ -21,7 +21,11 @@ type GameAction =
   | { type: 'CONFIRM_PERK' }
   | { type: 'SWITCH_WITH_BENCH', player: 'home' | 'away', handCardId: string, benchCardId: string }
   | { type: 'TAKE_POSSESSION', player: 'home' | 'away' }
-  | { type: 'DRAW_CARD', player: 'home' | 'away' };
+  | { type: 'DRAW_CARD', player: 'home' | 'away' }
+  | { type: 'CALL_STOPPAGE', player: 'home' | 'away' }
+  | { type: 'INITIATE_GRIND_CHALLENGE', player: 'home' | 'away', card: Card }
+  | { type: 'CONTEST_GRIND_CHALLENGE', cardId: string }
+  | { type: 'CONCEDE_GRIND_CHALLENGE' };
 
 const gameReducer = (state: GameState, action: GameAction): GameState => {
   switch (action.type) {
@@ -277,6 +281,107 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
       };
     }
 
+    case 'CALL_STOPPAGE': {
+      const { side, area } = state.puck;
+
+      // Determine face-off location per zone rules:
+      // Neutral zone  → centre ice (neutral-9)
+      // Home/Away zone → nearest end-zone face-off dot (area 0 = right, area 12 = left)
+      let faceoffSide: 'home' | 'away' | 'neutral';
+      let faceoffArea: number;
+
+      if (side === 'neutral') {
+        faceoffSide = 'neutral';
+        faceoffArea = 9;
+      } else {
+        faceoffSide = side;
+        // Right-side areas: 0, 1, 3, 7 → use dot 0; everything else → use dot 12
+        faceoffArea = [0, 1, 3, 7].includes(area) ? 0 : 12;
+      }
+
+      return {
+        ...state,
+        stoppage: true,
+        phase: 1,
+        activeCards: [],
+        puck: { area: faceoffArea as Area, side: faceoffSide, possession: null },
+        logs: [...state.logs,
+          `🛑 STOPPAGE! ${action.player.toUpperCase()} called a stop. ` +
+          `Face-off at ${faceoffSide}-${faceoffArea}.`],
+      };
+    }
+
+    case 'INITIATE_GRIND_CHALLENGE': {
+      const pendingGrindChallenge: PendingGrindChallenge = {
+        challenger: action.player,
+        challengerCard: action.card,
+      };
+      return {
+        ...state,
+        pendingGrindChallenge,
+        logs: [...state.logs,
+          `💥 GRIND CHALLENGE initiated by ${action.player.toUpperCase()} ` +
+          `with ${action.card.name} (${action.card.number ?? '?'})! Opponent must respond.`],
+      };
+    }
+
+    case 'CONTEST_GRIND_CHALLENGE': {
+      if (!state.pendingGrindChallenge) return state;
+      const { challenger, challengerCard } = state.pendingGrindChallenge;
+      const opponent = challenger === 'home' ? 'away' : 'home';
+      const opponentPlayer = state[opponent];
+      const responseCard = opponentPlayer.hand.find(c => c.id === action.cardId);
+      if (!responseCard) return state;
+
+      // Card always goes to discard regardless of colour
+      const updated = {
+        ...opponentPlayer,
+        hand: opponentPlayer.hand.filter(c => c.id !== action.cardId),
+        discard: [...opponentPlayer.discard, responseCard],
+      };
+
+      const responseIsYellow = responseCard.abilities.includes('Yellow');
+      const challengerNum = challengerCard.number ?? 0;
+      const opponentNum   = responseCard.number ?? 0;
+
+      let winner: 'home' | 'away';
+      let resultMsg: string;
+
+      if (!responseIsYellow) {
+        // Non-Yellow card is ignored — challenger auto-wins
+        winner = challenger;
+        resultMsg =
+          `${opponent} played ${responseCard.name} (not Yellow \u2014 ignored). ` +
+          `${challenger.toUpperCase()} wins automatically!`;
+      } else {
+        // Both Yellow — higher number wins (challenger wins ties)
+        winner = opponentNum > challengerNum ? opponent : challenger;
+        resultMsg =
+          `${challenger} played #${challengerNum} vs ${opponent}'s #${opponentNum}. ` +
+          `${winner.toUpperCase()} wins possession!`;
+      }
+
+      return {
+        ...state,
+        [opponent]: updated,
+        pendingGrindChallenge: null,
+        puck: { ...state.puck, possession: winner },
+        logs: [...state.logs, `\ud83e\udd4a GRIND CHALLENGE result: ${resultMsg}`],
+      };
+    }
+
+    case 'CONCEDE_GRIND_CHALLENGE': {
+      if (!state.pendingGrindChallenge) return state;
+      const { challenger } = state.pendingGrindChallenge;
+      return {
+        ...state,
+        pendingGrindChallenge: null,
+        puck: { ...state.puck, possession: challenger },
+        logs: [...state.logs,
+          `✅ GRIND CHALLENGE uncontested! ${challenger.toUpperCase()} wins automatically + free Move!`],
+      };
+    }
+
     case 'END_TURN': {
       const currentPlayer = state[state.turn];
       const updatedPlayer = drawCard(currentPlayer);
@@ -454,5 +559,10 @@ export const useGame = () => {
     confirmPerk: () => dispatch({ type: 'CONFIRM_PERK' }),
     takePossession: (player: 'home' | 'away') => dispatch({ type: 'TAKE_POSSESSION', player }),
     drawCardForPlayer: (player: 'home' | 'away') => dispatch({ type: 'DRAW_CARD', player }),
+    callStoppage: (player: 'home' | 'away') => dispatch({ type: 'CALL_STOPPAGE', player }),
+    initiateGrindChallenge: (player: 'home' | 'away', card: Card) =>
+      dispatch({ type: 'INITIATE_GRIND_CHALLENGE', player, card }),
+    contestGrindChallenge: (cardId: string) => dispatch({ type: 'CONTEST_GRIND_CHALLENGE', cardId }),
+    concedeGrindChallenge: () => dispatch({ type: 'CONCEDE_GRIND_CHALLENGE' }),
   };
 };

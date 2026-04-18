@@ -26,7 +26,7 @@ export const OFFICIAL_CARDS: Card[] = [
   { id: 'centre-1', name: 'Centre', number: 6, suits: ['Stick'], actions: [], abilities: ['Red'], specials: [], points: 15, image: '/cards/Centrehelm.png' },
   { id: 'defenceman-1', name: 'Defenceman', number: 7, suits: ['Helmet'], actions: [], abilities: ['Red'], specials: [], points: 15, image: '/cards/Defencestick.png' },
   { id: 'linechange-1', name: 'Line Change', number: 8, suits: ['Skate'], actions: ['Substitution'], abilities: ['Pink'], specials: [], points: 10, image: '/cards/Linechange.png' },
-  { id: 'superstar-1', name: 'Superstar', number: 8, suits: ['Stick', 'Glove'], actions: [], abilities: ['Orange', 'Blue'], specials: ['Dig it Out'], points: 30, image: '/cards/Superstarhelm.png' },
+  { id: 'superstar-1', name: 'Superstar', number: 8, suits: ['Stick', 'Glove'], actions: ['Move'], abilities: ['Orange', 'Blue'], specials: ['Dig it Out'], points: 30, image: '/cards/Superstarhelm.png' },
   { id: 'passing-1', name: 'Passing', number: 9, suits: ['Stick'], actions: ['Move'], abilities: ['Yellow'], specials: [], points: 20, image: '/cards/Passingskate.png' },
 
   // ROW 5
@@ -37,7 +37,7 @@ export const OFFICIAL_CARDS: Card[] = [
   // ROW 6
   { id: 'goalie-1', name: 'Goalie', number: 12, isGoalie: true, suits: ['Glove'], actions: ['Save', 'Block'], abilities: ['Red'], specials: [], points: 25, image: '/cards/Goalieskate.png' },
   { id: 'penaltykill-1', name: 'Penalty Kill', number: 12, suits: ['Helmet'], actions: [], abilities: ['Orange'], specials: ['K'], points: 10, image: '/cards/Penaltykill.png' },
-  { id: 'score-1', name: 'Score!', number: 14, suits: ['Stick'], actions: ['Score'], abilities: ['Blue'], specials: [], points: 20, image: '/cards/Score.png' },
+  { id: 'score-1', name: 'Score!', number: 14, suits: ['Stick'], actions: ['Move', 'Score'], abilities: ['Blue'], specials: [], points: 20, image: '/cards/Score.png' },
   { id: 'powerplay-1', name: 'Power Play', number: 15, suits: ['Helmet', 'Skate', 'Glove', 'Stick'], actions: [], abilities: ['Purple'], specials: [], points: 20, image: '/cards/PowerPglove.png' },
   
   // NEW CARDS FROM USER LIST
@@ -48,7 +48,7 @@ export const OFFICIAL_CARDS: Card[] = [
   { id: 'utility-plain', name: 'Utility', suits: ['Helmet', 'Skate', 'Glove', 'Stick'], hideSuits: true, actions: [], abilities: [], specials: ['U', 'Promotion Special: Utility'], points: 10, image: '/cards/Utility.png' },
   { id: 'rush-9', name: 'Rush 9', number: 9, suits: ['Skate'], actions: [], abilities: ['Orange'], specials: [], points: 12, image: '/cards/Rushhelmglove.png' },
   { id: 'rush-10', name: 'Rush 10', number: 10, suits: ['Skate'], actions: [], abilities: ['Orange'], specials: [], points: 15, image: '/cards/Rushhelmglove.png' },
-  { id: 'shoot-puck', name: 'Shoot the Puck', number: 6, suits: ['Helmet', 'Skate', 'Glove', 'Stick'], actions: ['Shoot'], abilities: ['Blue'], specials: [], points: 20, image: '/cards/Shootpuck.png' },
+  { id: 'shoot-puck', name: 'Shoot the Puck', number: 6, suits: ['Helmet', 'Skate', 'Glove', 'Stick'], actions: ['Move', 'Shoot'], abilities: ['Blue'], specials: [], points: 20, image: '/cards/Shootpuck.png' },
   { id: 'goal', name: 'Goal', number: 0, suits: ['Helmet', 'Skate', 'Glove', 'Stick'], actions: [], abilities: ['Purple'], specials: [], points: 50, image: '/cards/Goalhelm.png' },
   { id: 'crowd', name: 'Crowd', suits: ['Helmet', 'Skate', 'Glove', 'Stick'], actions: [], abilities: ['Silver'], specials: ['C', 'Crowd'], points: 5, image: '/cards/Crowd.png' },
 ];

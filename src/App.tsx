@@ -11,6 +11,8 @@ import { BenchBuilderScreen } from './components/BenchBuilderScreen';
 import { FaceoffModal } from './components/FaceoffModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { CardDetailModal } from './components/CardDetailModal';
+import { CardActionPanel } from './components/CardActionPanel';
+import type { ActionPanelItem } from './components/CardActionPanel';
 import { useGame } from './hooks/useGame';
 import { getAdjacentAreas, getAreasWithinHops } from './logic/adjacency';
 import { COLOR_ACTIONS } from './logic/colorActions';
@@ -25,7 +27,8 @@ function App() {
   const { 
     state, startGame, playCard, endTurn, movePuckTo, switchWithBench, 
     startFaceoff, nextPeriod, cancelChallenge,
-    selectPerk, confirmPerk, beginShotPhase, revertScoreAndDeflect, takePossession, drawCardForPlayer
+    selectPerk, confirmPerk, beginShotPhase, revertScoreAndDeflect, takePossession, drawCardForPlayer, callStoppage,
+    initiateGrindChallenge, contestGrindChallenge, concedeGrindChallenge
   } = useGame();
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [viewingCard, setViewingCard] = useState<CardType | null>(null);
@@ -39,6 +42,15 @@ function App() {
   const [faceoffJustWon, setFaceoffJustWon] = useState<'home' | 'away' | null>(null);
   // Tracks whether current player has played a card this turn (gates NEXT PHASE)
   const [hasPlayedThisTurn, setHasPlayedThisTurn] = useState(false);
+  // Pending action/special items from the last played card
+  const [resolutionQueue, setResolutionQueue] = useState<ActionPanelItem[]>([]);
+  const [resolvingCardName, setResolvingCardName] = useState('');
+  // Count of pending Doubles picks (1 = regular Doubles, 2 = Breakaway)
+  const [pendingDoubles, setPendingDoubles] = useState(0);
+  // Tracks the most recently played card (for Grind Challenge reference)
+  const [lastPlayedCard, setLastPlayedCard] = useState<CardType | null>(null);
+  // Tracks which Yellow card the opponent selected to contest a Grind Challenge
+  const [grindResponseCardId, setGrindResponseCardId] = useState<string | null>(null);
   // Stored bench selections from the builder phase
   const [homeBenchSelection, setHomeBenchSelection] = useState<CardType[]>([]);
   // Tracks which bench card is selected for a swap
@@ -155,6 +167,17 @@ function App() {
       } else if (item.value === 'Draw') {
         // Draw the top card from the current player's deck into their hand
         drawCardForPlayer(state.turn);
+      } else if (item.value === 'Doubles') {
+        // Open the action picker — player chooses any 1 action
+        setPendingDoubles(c => c + 1);
+      } else if (item.value === 'Stoppage') {
+        // Immediately stop play; puck moves to nearest zone face-off dot
+        callStoppage(state.turn);
+      } else if (item.value === 'Grind Challenge') {
+        // Use the last played card as the challenge card
+        if (lastPlayedCard) {
+          initiateGrindChallenge(state.turn, lastPlayedCard);
+        }
       } else if (item.value === 'Poke-check') {
         // Take possession; show nodes 1 step toward own net
         const adjacent = getAdjacentAreas(state.puck.area, state.puck.side);
@@ -202,8 +225,13 @@ function App() {
            }
         }
       }
+    } else if (item.type === 'special') {
+      if (item.value === 'Breakaway') {
+        // Grant 2 consecutive Doubles picks
+        setPendingDoubles(2);
+      }
     }
-    // Save, abilities, specials: handled via pendingPerk / existing challenge flow
+    // Other specials handled via pendingPerk / existing challenge flow
   };
 
   const handleAreaClick = (area: any, side: any) => {
@@ -305,6 +333,8 @@ function App() {
           onClose={() => setViewingCard(null)}
           isPlayDisabled={
             !hasStarted ||
+            // Already played a card this turn — must wait for next turn
+            hasPlayedThisTurn ||
             // Stoppage / lineup phase: must start a face-off first
             (state.stoppage && !state.activeChallenge) ||
             // Card already played this turn — awaiting perk resolution
@@ -321,19 +351,27 @@ function App() {
             const card = viewingCard;
             playCard(state.turn, card.id);
             setViewingCard(null);
+            setHasPlayedThisTurn(true);
+            setLastPlayedCard(card);
 
-            // Collect player-selected actions/specials + auto-granted colour ability actions
-            const items = [
+            // Build the list of items from player selections + auto-granted colour abilities
+            const items: ActionPanelItem[] = [
               ...selection.actions.map(v => ({ type: 'action' as const, value: v })),
               ...selection.specials.map(v => ({ type: 'special' as const, value: v })),
-              ...card.abilities.flatMap(ability =>
-                (COLOR_ACTIONS[ability] ?? []).map(v => ({ type: 'action' as const, value: v }))
-              ),
+              ...card.abilities.flatMap(ability => {
+                const acts = COLOR_ACTIONS[ability] ?? [];
+                return acts
+                  // Grind Challenge only available when player does NOT have possession
+                  .filter(a => !(a === 'Grind Challenge' && state.puck.possession === state.turn))
+                  .map(v => ({ type: 'action' as const, value: v }));
+              }),
             ];
 
-            // Apply all effects immediately — no resolution window
-            items.forEach(item => applyResolutionItem(item));
-            setHasPlayedThisTurn(true);
+            if (items.length > 0) {
+              // Queue up — player activates each via the sidebar panel
+              setResolutionQueue(items);
+              setResolvingCardName(card.name);
+            }
           }}
         />
       )}
@@ -353,6 +391,202 @@ function App() {
             state={state} 
             onCardDrop={(id) => playCard(state.turn, id)}
           />
+          <CardActionPanel
+            cardName={resolvingCardName}
+            queue={resolutionQueue}
+            onActivate={(item) => {
+              applyResolutionItem(item);
+              setResolutionQueue(prev => {
+                const idx = prev.findIndex(q => q.type === item.type && q.value === item.value);
+                return idx === -1 ? prev : prev.filter((_, i) => i !== idx);
+              });
+            }}
+            onSkip={() => setResolutionQueue([])}
+          />
+
+          {/* Doubles action picker — shown when a Purple ability grants a free-choice action */}
+          {pendingDoubles > 0 && (() => {
+            const hasPendingShot = !!state.pendingShot && state.pendingShot.shooter === state.turn;
+            const hasPossession  = state.puck.possession === state.turn;
+            const allActions = (
+              ['Move','Stretch Pass','Shoot','On-Net','Score','Body-Check',
+               'Poke-check','Deflect','Tip','Draw','Block','Intercept',
+               'Substitution','Icing','Clone','Punch','Save'] as const
+            ).filter(a => {
+              if (a === 'Score' && !hasPendingShot) return false;
+              if ((a === 'Move' || a === 'Stretch Pass') && !hasPossession) return false;
+              // Grind Challenge cannot be chosen from Doubles
+              return true;
+            });
+            return (
+              <div style={{
+                position: 'fixed', right: '340px', top: '25%', zIndex: 200,
+                background: 'rgba(40,10,70,0.97)', backdropFilter: 'blur(40px)',
+                border: '2px solid rgba(160,100,255,0.4)', borderRight: 'none',
+                borderRadius: '20px 0 0 20px',
+                boxShadow: '-15px 15px 40px rgba(0,0,0,0.8), 0 0 30px rgba(140,80,255,0.2)',
+                width: '180px', fontFamily: "'Inter',sans-serif", overflow: 'hidden',
+              }}>
+                <div style={{ padding:'12px 14px 8px', borderBottom:'1px solid rgba(160,100,255,0.2)',
+                  background:'rgba(160,100,255,0.07)' }}>
+                  <div style={{ fontSize:'9px', fontWeight:900, letterSpacing:'2px', color:'#c084fc' }}>
+                    {pendingDoubles > 1 ? 'BREAKAWAY' : 'DOUBLES'}
+                  </div>
+                  <div style={{ fontSize:'7.5px', fontWeight:700, letterSpacing:'1.5px',
+                    color:'rgba(255,255,255,0.35)', marginTop:'3px' }}>
+                    {pendingDoubles > 1
+                      ? `PICK ${pendingDoubles} — CHOOSE ANY ACTION`
+                      : 'CHOOSE ANY ACTION'}
+                  </div>
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:'5px', padding:'10px 10px 6px' }}>
+                  {allActions.map(act => (
+                    <button key={act}
+                      onClick={() => {
+                        applyResolutionItem({ type: 'action', value: act });
+                        setPendingDoubles(c => Math.max(0, c - 1));
+                      }}
+                      style={{
+                        display:'flex', alignItems:'center', gap:'8px',
+                        background:'rgba(255,255,255,0.04)', border:'1.5px solid rgba(160,100,255,0.25)',
+                        borderRadius:'10px', padding:'7px 10px', cursor:'pointer',
+                        color:'#c084fc', fontFamily:"'Inter',sans-serif",
+                        fontSize:'11px', fontWeight:700, textAlign:'left',
+                        transition:'background 0.15s, transform 0.12s',
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background='rgba(160,100,255,0.12)'; (e.currentTarget as HTMLElement).style.transform='translateX(-3px)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background='rgba(255,255,255,0.04)'; (e.currentTarget as HTMLElement).style.transform=''; }}
+                    >{act}</button>
+                  ))}
+                </div>
+                <button onClick={() => setPendingDoubles(0)}
+                  style={{
+                    margin:'6px 10px 12px', background:'transparent',
+                    border:'1px solid rgba(255,255,255,0.12)', borderRadius:'8px',
+                    color:'rgba(255,255,255,0.3)', fontSize:'9px', fontWeight:800,
+                    letterSpacing:'1.5px', padding:'7px', cursor:'pointer',
+                    fontFamily:"'Inter',sans-serif", width:'calc(100% - 20px)',
+                  }}>CANCEL ALL</button>
+              </div>
+            );
+          })()}
+
+          {state.pendingGrindChallenge && (() => {
+            const { challenger, challengerCard } = state.pendingGrindChallenge!;
+            const opponent = challenger === 'home' ? 'away' : 'home';
+            const opponentHand = state[opponent].hand;
+            const selectedIsYellow = grindResponseCardId
+              ? opponentHand.find(c => c.id === grindResponseCardId)?.abilities.includes('Yellow') ?? false
+              : false;
+            return (
+              <div style={{
+                position: 'fixed', inset: 0, zIndex: 500,
+                background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(12px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: "'Inter',sans-serif",
+              }}>
+                <div style={{
+                  background: 'linear-gradient(135deg, #1a120a 0%, #0d0a00 100%)',
+                  border: '2px solid rgba(250,200,50,0.4)', borderRadius: '24px',
+                  boxShadow: '0 30px 80px rgba(0,0,0,0.9), 0 0 60px rgba(250,200,50,0.15)',
+                  padding: '32px', width: '560px', maxWidth: '94vw',
+                  animation: 'modalFadeIn 0.3s ease-out',
+                }}>
+                  <div style={{ textAlign:'center', marginBottom:'20px' }}>
+                    <div style={{ fontSize:'11px', fontWeight:800, letterSpacing:'3px',
+                      color:'#fbbf24', marginBottom:'6px' }}>💥 GRIND CHALLENGE</div>
+                    <div style={{ fontSize:'20px', fontWeight:900, color:'#fff', marginBottom:'4px' }}>
+                      {challenger.toUpperCase()} CHALLENGES!
+                    </div>
+                    <div style={{ fontSize:'13px', color:'rgba(255,255,255,0.45)' }}>
+                      Played <strong style={{color:'#fbbf24'}}>{challengerCard.name}</strong>
+                      {challengerCard.number !== undefined && <> (#{challengerCard.number})</>}
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom:'16px' }}>
+                    <div style={{ fontSize:'10px', fontWeight:800, letterSpacing:'2px',
+                      color:'rgba(255,255,255,0.35)', marginBottom:'10px' }}>
+                      {opponent.toUpperCase()} — SELECT ANY CARD TO RESPOND
+                      &nbsp;<span style={{color:'#fbbf24'}}>★ Only Yellow cards count</span>
+                    </div>
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:'8px', justifyContent:'center',
+                      maxHeight:'180px', overflowY:'auto', padding:'4px' }}>
+                      {opponentHand.map(c => {
+                        const isYellow = c.abilities.includes('Yellow');
+                        const isSelected = grindResponseCardId === c.id;
+                        return (
+                          <button key={c.id} onClick={() => setGrindResponseCardId(c.id)}
+                            title={isYellow ? 'Yellow — counts as a valid contest' : 'Not Yellow — will not count; challenger auto-wins'}
+                            style={{
+                              padding:'7px 12px', borderRadius:'10px', cursor:'pointer',
+                              fontFamily:"'Inter',sans-serif", fontSize:'12px', fontWeight:700,
+                              border: isSelected
+                                ? `2px solid ${isYellow ? '#fbbf24' : '#ff6b6b'}`
+                                : `2px solid ${isYellow ? 'rgba(251,191,36,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                              background: isSelected
+                                ? (isYellow ? 'rgba(250,200,50,0.18)' : 'rgba(255,107,107,0.15)')
+                                : 'rgba(255,255,255,0.04)',
+                              color: isSelected
+                                ? (isYellow ? '#fbbf24' : '#ff6b6b')
+                                : (isYellow ? 'rgba(251,191,36,0.8)' : 'rgba(255,255,255,0.3)'),
+                              transition: 'all 0.15s',
+                              position: 'relative',
+                            }}>
+                            {isYellow && <span style={{ marginRight:'4px' }}>★</span>}
+                            {c.name}{c.number !== undefined ? ` #${c.number}` : ''}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {grindResponseCardId && !selectedIsYellow && (
+                      <div style={{ marginTop:'10px', fontSize:'11px', color:'#ff6b6b',
+                        fontWeight:700, textAlign:'center' }}>
+                        ⚠ Non-Yellow card — challenger auto-wins if played
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display:'flex', gap:'12px' }}>
+                    <button
+                      disabled={!grindResponseCardId}
+                      onClick={() => {
+                        if (grindResponseCardId) {
+                          contestGrindChallenge(grindResponseCardId);
+                          setGrindResponseCardId(null);
+                        }
+                      }}
+                      style={{
+                        flex:1, padding:'14px', borderRadius:'12px',
+                        cursor: grindResponseCardId ? 'pointer' : 'not-allowed',
+                        background: grindResponseCardId ? '#fbbf24' : '#333',
+                        color: grindResponseCardId ? '#000' : 'rgba(255,255,255,0.2)',
+                        border:'none', fontFamily:"'Inter',sans-serif", fontSize:'14px',
+                        fontWeight:800, letterSpacing:'0.5px', transition:'all 0.2s',
+                      }}>
+                      {selectedIsYellow ? '⚔️ CONTEST' : (grindResponseCardId ? '⚔️ PLAY (challenger wins)' : '⚔️ PLAY CARD')}
+                    </button>
+                    <button
+                      onClick={() => {
+                        concedeGrindChallenge();
+                        setGrindResponseCardId(null);
+                        setResolutionQueue(prev => [{ type: 'action', value: 'Move' }, ...prev]);
+                        setResolvingCardName('Grind Challenge (Free Move)');
+                      }}
+                      style={{
+                        flex:1, padding:'14px', borderRadius:'12px', cursor:'pointer',
+                        background:'rgba(255,255,255,0.06)', color:'rgba(255,255,255,0.5)',
+                        border:'1.5px solid rgba(255,255,255,0.12)', fontFamily:"'Inter',sans-serif",
+                        fontSize:'14px', fontWeight:800, letterSpacing:'0.5px', transition:'all 0.2s',
+                      }}>
+                      🏳️ CONCEDE
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           <PositionRoster side="home" />
           <PositionRoster side="away" />
           {/* Fixed overlays */}
